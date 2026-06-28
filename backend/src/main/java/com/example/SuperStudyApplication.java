@@ -6,7 +6,7 @@ import org.springframework.boot.autoconfigure.SpringBootApplication;
 import org.springframework.scheduling.annotation.EnableScheduling;
 
 @SpringBootApplication
-@MapperScan("com.example")
+@MapperScan({"com.example.sys.mapper", "com.example.student.mapper", "com.example.exam.mapper", "com.example.growth.mapper", "com.example.learning.mapper", "com.example.mapper"})
 @EnableScheduling
 public class SuperStudyApplication {
 

@@ -1,10 +1,10 @@
 # ---- Build Stage ----
 FROM maven:3.9-eclipse-temurin-17 AS build
 
-WORKDIR /app
+WORKDIR /build
 
-COPY src ./src
 COPY pom.xml .
+COPY src ./src
 RUN mvn clean package -Dmaven.test.skip=true -B
 
 # ---- Runtime Stage ----
@@ -18,7 +18,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 
 ENV TZ=Asia/Shanghai
 
-COPY --from=build /app/target/*.jar app.jar
+COPY --from=build /build/target/*.jar app.jar
 
 RUN mkdir -p /app/logs /app/static
 

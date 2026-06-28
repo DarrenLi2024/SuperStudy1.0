@@ -101,7 +101,8 @@ public class ExamServiceImpl extends ServiceImpl<ExamRecordMapper, ExamRecord> i
     @Override
     public String calculateBatch(Integer score) {
         if (score == null) return "未知";
-        if (score >= 550) return "211/双一流";
+        if (score >= 600) return "985/双一流";
+        if (score >= 550) return "211";
         if (score >= 480) return "普通一本";
         if (score >= 400) return "公办二本";
         return "本科以下";
@@ -257,11 +258,16 @@ public class ExamServiceImpl extends ServiceImpl<ExamRecordMapper, ExamRecord> i
 
     private List<CollegeCardResponse.CollegeInfo> getRandomColleges(String batch) {
         if (batch == null) return new ArrayList<>();
-        List<CollegeBasic> colleges = collegeBasicMapper.selectRandomByBatch(batch);
+        // 使用 LambdaQueryWrapper 替代 XML Mapper（避免 XML 映射问题）
+        LambdaQueryWrapper<CollegeBasic> wrapper = new LambdaQueryWrapper<CollegeBasic>()
+                .eq(CollegeBasic::getAdmissionBatch, batch);
+        List<CollegeBasic> all = collegeBasicMapper.selectList(wrapper);
+        Collections.shuffle(all);
+        List<CollegeBasic> colleges = all.stream().limit(3).collect(Collectors.toList());
         return colleges.stream().map(c -> CollegeCardResponse.CollegeInfo.builder()
                 .id(c.getId())
                 .name(c.getCollegeName())
-                .logo(c.getLogoPath() != null ? c.getLogoPath() : "/logos/default.png")
+                .logo(c.getLogoPath() != null ? c.getLogoPath() : "/logos/default.svg")
                 .batch(c.getAdmissionBatch())
                 .build()).collect(Collectors.toList());
     }
