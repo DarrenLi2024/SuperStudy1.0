@@ -7,7 +7,7 @@ import lombok.Data;
 import lombok.NoArgsConstructor;
 
 import java.io.Serializable;
-import java.util.Date;
+import java.time.LocalDateTime;
 
 @Data
 @Builder
@@ -28,8 +28,8 @@ public class StudentProfileResponse implements Serializable {
     private Integer baselineScore;
     private Integer baselineRank;
     private Integer remainingDays;
-    private Date createdAt;
-    private Date updatedAt;
+    private LocalDateTime createdAt;
+    private LocalDateTime updatedAt;
 
     public static StudentProfileResponse fromEntity(StudentProfile profile) {
         return StudentProfileResponse.builder()
