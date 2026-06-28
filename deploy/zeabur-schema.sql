@@ -1,7 +1,12 @@
 -- =============================================
--- SuperStudy 数据库建表脚本 - Zeabur MySQL 专用
+-- SuperStudy 数据库建表脚本 — Zeabur MySQL 专用
 -- 用法: 在 Zeabur MySQL 控制台直接粘贴执行
+-- 同步自: backend/src/main/resources/sql/init.sql
+-- 最后同步: 2026-06-29
 -- =============================================
+
+CREATE DATABASE IF NOT EXISTS superstudy CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
+USE superstudy;
 
 -- 用户账号表
 CREATE TABLE IF NOT EXISTS sys_user (
@@ -44,8 +49,8 @@ CREATE TABLE IF NOT EXISTS exam_record (
   equivalent_gaokao_score INT COMMENT '等效高考分',
   equivalent_rank INT COMMENT '等效三年位次',
   current_batch VARCHAR(50) COMMENT '当前稳妥批次',
-  exam_date DATE COMMENT '考试日期',
   ai_diagnosis_report TEXT COMMENT 'AI诊断报告',
+  exam_date DATE COMMENT '考试日期',
   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
   INDEX idx_student_date (student_id, exam_date)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='考试记录表';
@@ -71,6 +76,7 @@ CREATE TABLE IF NOT EXISTS error_question (
   knowledge_point VARCHAR(100) COMMENT '知识点',
   question_content TEXT COMMENT '题目内容',
   wrong_answer TEXT COMMENT '错误答案',
+  correct_answer TEXT COMMENT '正确答案',
   ai_analysis TEXT COMMENT 'AI错因分析',
   reinforcement_flag TINYINT DEFAULT 0 COMMENT '补强训练标记',
   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
@@ -96,6 +102,10 @@ CREATE TABLE IF NOT EXISTS college_basic (
   logo_path VARCHAR(255) COMMENT 'LOGO存储路径',
   admission_batch VARCHAR(50) COMMENT '录取批次',
   subject_type ENUM('physics', 'history', 'both') COMMENT '科类',
+  min_rank INT COMMENT '稳妥位次下界',
+  max_rank INT COMMENT '稳妥位次上界',
+  province VARCHAR(50) DEFAULT '河南' COMMENT '适用省份',
+  `year` INT DEFAULT 2025 COMMENT '参考年份',
   last_crawled TIMESTAMP COMMENT '抓取更新时间',
   UNIQUE KEY uk_name (college_name),
   INDEX idx_batch (admission_batch)
@@ -104,12 +114,12 @@ CREATE TABLE IF NOT EXISTS college_basic (
 -- 一分一段自治表
 CREATE TABLE IF NOT EXISTS score_rank (
   id BIGINT PRIMARY KEY AUTO_INCREMENT COMMENT '记录ID',
-  year INT NOT NULL COMMENT '年份',
+  `year` INT NOT NULL COMMENT '年份',
   subject_type ENUM('physics', 'history') COMMENT '科类',
   score INT NOT NULL COMMENT '分数',
   rank_value INT NOT NULL COMMENT '对应位次',
   province VARCHAR(50) DEFAULT '未知' COMMENT '省份',
-  UNIQUE KEY uk_year_subject_score (year, subject_type, score),
+  UNIQUE KEY uk_year_subject_score (`year`, subject_type, score),
   INDEX idx_score (score)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='一分一段自治表';
 
@@ -120,53 +130,72 @@ CREATE TABLE IF NOT EXISTS ai_question_bank (
   knowledge_point VARCHAR(100) COMMENT '知识点',
   difficulty ENUM('basic', 'medium', 'hard') COMMENT '难度',
   question_content TEXT NOT NULL COMMENT '题目内容',
+  options_json JSON COMMENT '选项JSON',
   answer TEXT COMMENT '答案',
+  analysis TEXT COMMENT '解析',
   score_range_tag VARCHAR(50) COMMENT '适配分数段标签',
+  quality_score DECIMAL(4,2) DEFAULT 0.85 COMMENT '质量评分',
+  usage_count INT DEFAULT 0 COMMENT '使用次数',
+  source_type VARCHAR(20) DEFAULT 'AI' COMMENT '来源类型',
   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
   updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
   INDEX idx_subject_difficulty (subject, difficulty)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='AI动态题库表';
 
 -- ========================
--- 初始用户数据
+-- 初始用户数据（密码: password123）
 -- ========================
 INSERT INTO sys_user (username, password, role, student_id, status) VALUES
-('admin', '$2a$10$N9qo8uLOickgx2ZMRZoMye.IjzqAKL9xL5jvMFVdNJHvGCgTq/VEq', 'admin', NULL, 1),
-('student001', '$2a$10$N9qo8uLOickgx2ZMRZoMye.IjzqAKL9xL5jvMFVdNJHvGCgTq/VEq', 'student', 1, 1),
-('parent001', '$2a$10$N9qo8uLOickgx2ZMRZoMye.IjzqAKL9xL5jvMFVdNJHvGCgTq/VEq', 'parent', 1, 1);
+('admin', '$2a$10$5zLGHK6AEmomhVeueoa0tOPfvc22w7sKBwH69eheOy0E/rXGD9H8i', 'admin', NULL, 1),
+('student001', '$2a$10$5zLGHK6AEmomhVeueoa0tOPfvc22w7sKBwH69eheOy0E/rXGD9H8i', 'student', 1, 1),
+('parent001', '$2a$10$5zLGHK6AEmomhVeueoa0tOPfvc22w7sKBwH69eheOy0E/rXGD9H8i', 'parent', 1, 1);
 
 INSERT INTO student_profile (user_id, grade, subject_combination, gaokao_mode, target_score, dream_college, dream_college_batch, baseline_score, baseline_rank, remaining_days) VALUES
-(1, '高二', '历史+政治+地理', '新高考3+1+2', 600, '北京大学', '985/双一流', 450, 96500, 710);
+(2, '高二', '历史+政治+地理', '新高考3+1+2', 600, '北京大学', '985', 450, 96500, 710);
 
 -- ========================
--- 院校种子数据
+-- 院校种子数据（含稳妥位次范围）
 -- ========================
-INSERT INTO college_basic (college_name, logo_path, admission_batch, subject_type) VALUES
-('北京大学', '/logos/default.svg', '985/双一流', 'both'),
-('清华大学', '/logos/default.svg', '985/双一流', 'both'),
-('复旦大学', '/logos/default.svg', '985/双一流', 'both'),
-('上海交通大学', '/logos/default.svg', '985/双一流', 'both'),
-('浙江大学', '/logos/default.svg', '985/双一流', 'both'),
-('南京大学', '/logos/default.svg', '985/双一流', 'both'),
-('武汉大学', '/logos/default.svg', '985/双一流', 'both'),
-('中山大学', '/logos/default.svg', '985/双一流', 'both'),
-('郑州大学', '/logos/default.svg', '211', 'both'),
-('南昌大学', '/logos/default.svg', '211', 'both'),
-('云南大学', '/logos/default.svg', '211', 'both'),
-('河南大学', '/logos/default.svg', '普通一本', 'both'),
-('河北师范大学', '/logos/default.svg', '普通一本', 'both'),
-('山西大学', '/logos/default.svg', '普通一本', 'both'),
-('湖北大学', '/logos/default.svg', '普通一本', 'both'),
-('洛阳师范学院', '/logos/default.svg', '公办二本', 'both'),
-('安阳师范学院', '/logos/default.svg', '公办二本', 'both'),
-('南阳理工学院', '/logos/default.svg', '公办二本', 'both'),
-('信阳师范大学', '/logos/default.svg', '公办二本', 'both'),
-('周口师范学院', '/logos/default.svg', '公办二本', 'both');
+INSERT INTO college_basic (college_name, logo_path, admission_batch, subject_type, min_rank, max_rank, province, `year`) VALUES
+-- 985/双一流
+('北京大学', '/logos/default.svg', '985', 'both', 500, 3000, '河南', 2025),
+('清华大学', '/logos/default.svg', '985', 'both', 500, 3000, '河南', 2025),
+('复旦大学', '/logos/default.svg', '985', 'both', 1500, 5000, '河南', 2025),
+('上海交通大学', '/logos/default.svg', '985', 'both', 1500, 5000, '河南', 2025),
+('浙江大学', '/logos/default.svg', '985', 'both', 2000, 6000, '河南', 2025),
+('南京大学', '/logos/default.svg', '985', 'both', 2500, 6500, '河南', 2025),
+('武汉大学', '/logos/default.svg', '985', 'both', 5000, 12000, '河南', 2025),
+('中山大学', '/logos/default.svg', '985', 'both', 6000, 14000, '河南', 2025),
+-- 211
+('郑州大学', '/logos/default.svg', '211', 'both', 10000, 35000, '河南', 2025),
+('南昌大学', '/logos/default.svg', '211', 'both', 15000, 45000, '河南', 2025),
+('云南大学', '/logos/default.svg', '211', 'both', 18000, 48000, '河南', 2025),
+('广西大学', '/logos/default.svg', '211', 'both', 20000, 50000, '河南', 2025),
+('贵州大学', '/logos/default.svg', '211', 'both', 20000, 50000, '河南', 2025),
+('海南大学', '/logos/default.svg', '211', 'both', 25000, 55000, '河南', 2025),
+('宁夏大学', '/logos/default.svg', '211', 'both', 28000, 58000, '河南', 2025),
+-- 普通一本
+('河南大学', '/logos/default.svg', 'first_class', 'both', 40000, 80000, '河南', 2025),
+('河北师范大学', '/logos/default.svg', 'first_class', 'both', 45000, 85000, '河南', 2025),
+('山西大学', '/logos/default.svg', 'first_class', 'both', 45000, 85000, '河南', 2025),
+('安徽师范大学', '/logos/default.svg', 'first_class', 'both', 50000, 90000, '河南', 2025),
+('福建师范大学', '/logos/default.svg', 'first_class', 'both', 50000, 90000, '河南', 2025),
+('江西师范大学', '/logos/default.svg', 'first_class', 'both', 55000, 95000, '河南', 2025),
+('湖北大学', '/logos/default.svg', 'first_class', 'both', 50000, 90000, '河南', 2025),
+('湖南科技大学', '/logos/default.svg', 'first_class', 'both', 55000, 95000, '河南', 2025),
+-- 公办二本
+('洛阳师范学院', '/logos/default.svg', 'second_class', 'both', 100000, 160000, '河南', 2025),
+('安阳师范学院', '/logos/default.svg', 'second_class', 'both', 110000, 170000, '河南', 2025),
+('南阳理工学院', '/logos/default.svg', 'second_class', 'both', 110000, 170000, '河南', 2025),
+('信阳师范大学', '/logos/default.svg', 'second_class', 'both', 120000, 180000, '河南', 2025),
+('周口师范学院', '/logos/default.svg', 'second_class', 'both', 130000, 190000, '河南', 2025),
+('黄淮学院', '/logos/default.svg', 'second_class', 'both', 130000, 190000, '河南', 2025),
+('平顶山学院', '/logos/default.svg', 'second_class', 'both', 140000, 200000, '河南', 2025);
 
 -- ========================
--- 一分一段种子数据
+-- 一分一段种子数据（河南省 2025 历史/物理 + 2024 近三年参考）
 -- ========================
-INSERT INTO score_rank (year, subject_type, score, rank_value, province) VALUES
+INSERT INTO score_rank (`year`, subject_type, score, rank_value, province) VALUES
 (2025, 'history', 650, 1200, '河南'),
 (2025, 'history', 640, 1800, '河南'),
 (2025, 'history', 630, 2600, '河南'),
@@ -192,9 +221,17 @@ INSERT INTO score_rank (year, subject_type, score, rank_value, province) VALUES
 (2025, 'history', 430, 117000, '河南'),
 (2025, 'history', 420, 128000, '河南'),
 (2025, 'history', 410, 139500, '河南'),
-(2025, 'history', 400, 151500, '河南');
-
-INSERT INTO score_rank (year, subject_type, score, rank_value, province) VALUES
+(2025, 'history', 400, 151500, '河南'),
+(2025, 'history', 390, 164000, '河南'),
+(2025, 'history', 380, 177000, '河南'),
+(2025, 'history', 370, 190500, '河南'),
+(2025, 'history', 360, 204500, '河南'),
+(2025, 'history', 350, 219000, '河南'),
+(2025, 'history', 340, 234000, '河南'),
+(2025, 'history', 330, 249500, '河南'),
+(2025, 'history', 320, 265500, '河南'),
+(2025, 'history', 310, 282000, '河南'),
+(2025, 'history', 300, 299000, '河南'),
 (2025, 'physics', 680, 800, '河南'),
 (2025, 'physics', 670, 1400, '河南'),
 (2025, 'physics', 660, 2400, '河南'),
@@ -223,6 +260,31 @@ INSERT INTO score_rank (year, subject_type, score, rank_value, province) VALUES
 (2025, 'physics', 430, 163000, '河南'),
 (2025, 'physics', 420, 176000, '河南'),
 (2025, 'physics', 410, 189500, '河南'),
-(2025, 'physics', 400, 203500, '河南');
+(2025, 'physics', 400, 203500, '河南'),
+(2025, 'physics', 390, 218000, '河南'),
+(2025, 'physics', 380, 233000, '河南'),
+(2025, 'physics', 370, 248500, '河南'),
+(2025, 'physics', 360, 264500, '河南'),
+(2025, 'physics', 350, 281000, '河南'),
+(2025, 'physics', 340, 298000, '河南'),
+(2025, 'physics', 330, 315500, '河南'),
+(2025, 'physics', 320, 333500, '河南'),
+(2025, 'physics', 310, 352000, '河南'),
+(2025, 'physics', 300, 371000, '河南'),
+-- 2024年一分一段数据（近三年参考）
+(2024, 'history', 600, 7200, '河南'),
+(2024, 'history', 550, 24800, '河南'),
+(2024, 'history', 500, 55500, '河南'),
+(2024, 'history', 450, 98500, '河南'),
+(2024, 'history', 400, 154000, '河南'),
+(2024, 'history', 350, 222000, '河南'),
+(2024, 'history', 300, 301000, '河南'),
+(2024, 'physics', 600, 19000, '河南'),
+(2024, 'physics', 550, 47500, '河南'),
+(2024, 'physics', 500, 88000, '河南'),
+(2024, 'physics', 450, 141000, '河南'),
+(2024, 'physics', 400, 206000, '河南'),
+(2024, 'physics', 350, 284000, '河南'),
+(2024, 'physics', 300, 374000, '河南');
 
 COMMIT;

@@ -1,0 +1,25 @@
+# =============================================
+# SuperStudy Railway 部署配置
+# =============================================
+
+[build]
+  builder = "DOCKERFILE"
+  dockerfilePath = "backend/Dockerfile"
+
+[deploy]
+  startCommand = "java -jar app.jar --spring.profiles.active=prod"
+  healthcheckPath = "/api/v1/user/login"
+  healthcheckTimeout = 120
+  restartPolicyType = "ON_FAILURE"
+  restartPolicyMaxRetries = 3
+
+[[service]]
+  name = "backend"
+  
+[[service]]
+  name = "frontend"
+  dockerfilePath = "frontend/Dockerfile"
+
+[service.frontend.deploy]
+  healthcheckPath = "/"
+  healthcheckTimeout = 60

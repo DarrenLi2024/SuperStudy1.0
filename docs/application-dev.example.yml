@@ -1,0 +1,38 @@
+# ========================
+# AI 大模型配置 — 开发环境
+# ========================
+# 使用方式：
+#   cp docs/application-dev.example.yml backend/src/main/resources/application-dev.yml
+#   编辑 application-dev.yml 填入你的 API 密钥
+#   SPRING_PROFILES_ACTIVE=dev mvn spring-boot:run
+#
+# 注意：application-dev.yml 已被 .gitignore 排除，不会误提交密钥。
+# ========================
+
+# DeepSeek 配置（推荐，¥1/百万token，国内直连）
+ai:
+  llm:
+    provider: deepseek
+    base-url: https://api.deepseek.com/v1/chat/completions
+    api-key: sk-your-deepseek-api-key-here
+    model: deepseek-chat
+    timeout-ms: 8000
+    max-retries: 2
+    cache-enabled: true
+    cache-ttl-seconds: 1800
+
+# === 备选方案：OpenAI ===
+# ai:
+#   llm:
+#     provider: openai
+#     base-url: https://api.openai.com/v1/chat/completions
+#     api-key: sk-your-openai-api-key
+#     model: gpt-4o-mini
+
+# === 备选方案：Ollama 本地 ===
+# ai:
+#   llm:
+#     provider: ollama
+#     base-url: http://localhost:11434/v1/chat/completions
+#     api-key: ollama
+#     model: qwen2.5:7b
