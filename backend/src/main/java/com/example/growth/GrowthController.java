@@ -4,6 +4,7 @@ import com.example.dto.response.CollegeCardResponse;
 import com.example.dto.response.GrowthDataResponse;
 import com.example.dto.response.GrowthProgressResponse;
 import com.example.growth.entity.GrowthRecord;
+import com.example.security.StudentAccessService;
 import com.example.util.ResponseResult;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.web.bind.annotation.*;
@@ -17,11 +18,15 @@ public class GrowthController {
     @Autowired
     private GrowthService growthService;
 
+    @Autowired
+    private StudentAccessService studentAccessService;
+
     /**
      * 获取三段式院校卡片数据
      */
     @GetMapping("/cards/{studentId}")
     public ResponseResult<CollegeCardResponse> getCollegeCards(@PathVariable Long studentId) {
+        studentAccessService.assertReadable(studentId);
         CollegeCardResponse cards = growthService.getCollegeCards(studentId);
         return ResponseResult.success(cards);
     }
@@ -31,6 +36,7 @@ public class GrowthController {
      */
     @GetMapping("/progress/{studentId}")
     public ResponseResult<GrowthProgressResponse> getGrowthProgress(@PathVariable Long studentId) {
+        studentAccessService.assertReadable(studentId);
         GrowthProgressResponse progress = growthService.getGrowthProgress(studentId);
         return ResponseResult.success(progress);
     }
@@ -40,6 +46,7 @@ public class GrowthController {
      */
     @GetMapping("/history/{studentId}")
     public ResponseResult<List<GrowthRecord>> getGrowthHistory(@PathVariable Long studentId) {
+        studentAccessService.assertReadable(studentId);
         List<GrowthRecord> history = growthService.getGrowthHistory(studentId);
         return ResponseResult.success(history);
     }
@@ -49,6 +56,7 @@ public class GrowthController {
      */
     @GetMapping("/data/{studentId}")
     public ResponseResult<GrowthDataResponse> getGrowthData(@PathVariable Long studentId) {
+        studentAccessService.assertReadable(studentId);
         GrowthDataResponse data = growthService.getGrowthData(studentId);
         return ResponseResult.success(data);
     }

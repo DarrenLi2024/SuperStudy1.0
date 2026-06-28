@@ -23,4 +23,8 @@ public final class SecurityUtils {
     public static String getCurrentRole() {
         return getCurrentUser().getRole();
     }
+
+    public static Long getCurrentStudentId() {
+        return getCurrentUser().getStudentId();
+    }
 }

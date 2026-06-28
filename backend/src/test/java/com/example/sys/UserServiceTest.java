@@ -78,7 +78,7 @@ class UserServiceTest {
         void login_Success() {
             SysUser user = createMockUser(1L, "student001", "student", 1);
             when(sysUserMapper.selectOne(any())).thenReturn(user);
-            when(jwtUtil.generateToken(anyLong(), anyString(), anyString(), anyLong())).thenReturn("mock-token");
+            when(jwtUtil.generateToken(anyLong(), anyString(), anyString(), nullable(Long.class))).thenReturn("mock-token");
 
             com.example.sys.dto.LoginRequest request = new com.example.sys.dto.LoginRequest();
             request.setUsername("student001");
@@ -216,6 +216,11 @@ class UserServiceTest {
         @Test
         @DisplayName("获取用户列表成功")
         void listUsers_Success() {
+            com.baomidou.mybatisplus.extension.plugins.pagination.Page<SysUser> page =
+                    new com.baomidou.mybatisplus.extension.plugins.pagination.Page<>(1, 10, 1);
+            page.setRecords(java.util.Collections.emptyList());
+            when(sysUserMapper.selectPage(any(), any())).thenReturn(page);
+
             userService.listUsers(null, 1, 10);
             verify(sysUserMapper).selectPage(any(), any());
         }

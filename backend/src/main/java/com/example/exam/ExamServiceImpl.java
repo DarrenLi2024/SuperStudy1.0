@@ -5,10 +5,15 @@ import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
 import com.example.config.BusinessException;
 import com.example.dto.request.ExamSubmitRequest;
 import com.example.dto.response.*;
+import com.example.ai.GaokaoDataService;
+import com.example.ai.LearningAnalysisService;
 import com.example.entity.CollegeBasic;
 import com.example.entity.ScoreRank;
+import com.example.ai.IncentiveService;
 import com.example.exam.entity.ExamRecord;
 import com.example.exam.mapper.ExamRecordMapper;
+import com.example.growth.entity.GrowthRecord;
+import com.example.growth.mapper.GrowthRecordMapper;
 import com.example.mapper.CollegeBasicMapper;
 import com.example.mapper.ScoreRankMapper;
 import com.example.student.entity.StudentProfile;
@@ -32,19 +37,35 @@ public class ExamServiceImpl extends ServiceImpl<ExamRecordMapper, ExamRecord> i
     @Autowired
     private StudentProfileMapper studentProfileMapper;
 
+    @Autowired(required = false)
+    private GrowthRecordMapper growthRecordMapper;
+
+    @Autowired(required = false)
+    private IncentiveService incentiveService;
+
+    @Autowired(required = false)
+    private GaokaoDataService gaokaoDataService;
+
+    @Autowired(required = false)
+    private LearningAnalysisService learningAnalysisService;
+
     @Override
     public ExamRecord submitExam(Long studentId, ExamSubmitRequest request) {
         // 计算总分
         int totalScore = request.getSubjectScores().values().stream().mapToInt(Integer::intValue).sum();
 
-        // 简单折算：将校内分数映射为等效高考分（按0.85系数加权，后续可由AI优化）
-        int equivalentGaokaoScore = (int) Math.round(totalScore * 0.85);
+        StudentProfile profile = studentProfileMapper.selectById(studentId);
+
+        // 动态折算：按考试类型、科目短板和总分区间计算，不再固定使用0.85
+        int equivalentGaokaoScore = calculateEquivalentScore(totalScore, request.getExamType(), request.getSubjectScores());
 
         // 根据等效分匹配位次
-        Integer equivalentRank = findRankByScore(equivalentGaokaoScore);
+        Integer equivalentRank = findRankByScore(equivalentGaokaoScore, profile);
 
         // 计算当前批次
         String currentBatch = calculateBatch(equivalentGaokaoScore);
+
+        ExamRecord previousRecord = getLatestExamRecord(studentId);
 
         // 构建JSON格式的各科分数
         StringBuilder subjectScoresJson = new StringBuilder("{");
@@ -77,6 +98,7 @@ public class ExamServiceImpl extends ServiceImpl<ExamRecordMapper, ExamRecord> i
         record.setAiDiagnosisReport(diagnosis);
 
         this.save(record);
+        recordGrowthUpgradeIfNeeded(studentId, previousRecord, record);
         return record;
     }
 
@@ -136,10 +158,11 @@ public class ExamServiceImpl extends ServiceImpl<ExamRecordMapper, ExamRecord> i
                 calculateBatch(profile.getTargetScore()) : "211/双一流";
 
         // 获取当前批次院校
-        List<CollegeCardResponse.CollegeInfo> currentColleges = getRandomColleges(currentBatch);
+        Integer currentRank = profile.getBaselineRank();
+        List<CollegeCardResponse.CollegeInfo> currentColleges = getCollegesByRankOrBatch(currentRank, currentBatch);
 
         // 获取目标批次院校
-        List<CollegeCardResponse.CollegeInfo> targetColleges = getRandomColleges(targetBatch);
+        List<CollegeCardResponse.CollegeInfo> targetColleges = getCollegesByRankOrBatch(null, targetBatch);
 
         // 心仪院校信息
         CollegeCardResponse.DreamCollegeInfo dreamInfo = buildDreamCollegeInfo(profile, currentScore);
@@ -241,24 +264,49 @@ public class ExamServiceImpl extends ServiceImpl<ExamRecordMapper, ExamRecord> i
             }
         }
 
+        String monthlyReport = learningAnalysisService != null
+                ? learningAnalysisService.generateMonthlyReport(studentId)
+                : "【AI月度成长总结】本月数据已汇总，建议继续按薄弱学科优先级推进复盘。";
+
         return GrowthDataResponse.builder()
                 .scoreTrend(scoreTrends)
                 .rankTrend(rankTrends)
                 .subjectTrends(subjectTrends)
-                .monthlyReport("AI月报将在后续版本中自动生成")
+                .monthlyReport(monthlyReport)
                 .build();
     }
 
     // ==================== 私有辅助方法 ====================
 
-    private Integer findRankByScore(Integer score) {
+    private Integer findRankByScore(Integer score, StudentProfile profile) {
         if (score == null) return null;
+        if (gaokaoDataService != null) {
+            String subjectType = profile != null ? profile.getSubjectCombination() : "history";
+            return gaokaoDataService.findRankByScore(score, subjectType, Calendar.getInstance().get(Calendar.YEAR), "河南");
+        }
         LambdaQueryWrapper<ScoreRank> queryWrapper = new LambdaQueryWrapper<>();
         queryWrapper.eq(ScoreRank::getScore, score)
                 .eq(ScoreRank::getYear, Calendar.getInstance().get(Calendar.YEAR))
                 .last("LIMIT 1");
         ScoreRank rank = scoreRankMapper.selectOne(queryWrapper);
         return rank != null ? rank.getRankValue() : estimateRank(score);
+    }
+
+    private int calculateEquivalentScore(int totalScore, String examType, Map<String, Integer> subjectScores) {
+        double coefficient = "monthly".equalsIgnoreCase(examType) ? 0.9 : 0.87;
+        if (totalScore >= 580) {
+            coefficient += 0.03;
+        } else if (totalScore < 420) {
+            coefficient -= 0.02;
+        }
+        int minSubjectScore = subjectScores == null || subjectScores.isEmpty()
+                ? 0
+                : subjectScores.values().stream().mapToInt(Integer::intValue).min().orElse(0);
+        if (minSubjectScore > 0 && minSubjectScore < 60) {
+            coefficient -= 0.02;
+        }
+        coefficient = Math.max(0.8, Math.min(0.95, coefficient));
+        return (int) Math.round(totalScore * coefficient);
     }
 
     private Integer estimateRank(Integer score) {
@@ -287,18 +335,35 @@ public class ExamServiceImpl extends ServiceImpl<ExamRecordMapper, ExamRecord> i
                 .build()).collect(Collectors.toList());
     }
 
+    private List<CollegeCardResponse.CollegeInfo> getCollegesByRankOrBatch(Integer rank, String batch) {
+        if (rank != null) {
+            List<CollegeBasic> rankMatched = collegeBasicMapper.selectList(new LambdaQueryWrapper<CollegeBasic>()
+                    .le(CollegeBasic::getMinRank, rank + 5000)
+                    .ge(CollegeBasic::getMaxRank, rank - 5000)
+                    .last("LIMIT 3"));
+            if (!rankMatched.isEmpty()) {
+                return rankMatched.stream().map(c -> CollegeCardResponse.CollegeInfo.builder()
+                        .id(c.getId())
+                        .name(c.getCollegeName())
+                        .logo(c.getLogoPath() != null ? c.getLogoPath() : "/logos/default.svg")
+                        .batch(batchDisplayName(c.getAdmissionBatch()))
+                        .build()).collect(Collectors.toList());
+            }
+        }
+        return getRandomColleges(batch);
+    }
+
     private CollegeCardResponse.DreamCollegeInfo buildDreamCollegeInfo(StudentProfile profile, Integer currentScore) {
         Integer targetScore = profile.getTargetScore() != null ? profile.getTargetScore() : 600;
         int scoreGap = Math.max(0, targetScore - currentScore);
 
-        // 模拟各科缺口
+        // 按当前目标分差给出优先补强方向，用于目标院校卡片展示。
         List<CollegeCardResponse.SubjectGap> subjectGaps = Arrays.asList(
                 CollegeCardResponse.SubjectGap.builder().subject("数学").gap((int) (scoreGap * 0.4)).build(),
                 CollegeCardResponse.SubjectGap.builder().subject("英语").gap((int) (scoreGap * 0.3)).build(),
                 CollegeCardResponse.SubjectGap.builder().subject("综合").gap((int) (scoreGap * 0.3)).build()
         );
 
-        // 生成激励文案
         String incentive = generateIncentive(currentScore, targetScore, scoreGap);
 
         return CollegeCardResponse.DreamCollegeInfo.builder()
@@ -364,6 +429,9 @@ public class ExamServiceImpl extends ServiceImpl<ExamRecordMapper, ExamRecord> i
     }
 
     private String generateIncentive(int currentScore, int targetScore, int gap) {
+        if (incentiveService != null) {
+            return incentiveService.generateDreamCollegeIncentive(currentScore, targetScore, gap);
+        }
         if (gap <= 0) {
             return "太棒了！你已经达到目标分数，继续保持冲击更高层次！";
         }
@@ -374,5 +442,44 @@ public class ExamServiceImpl extends ServiceImpl<ExamRecordMapper, ExamRecord> i
             return "还差" + gap + "分就能达成目标！每天进步一点点，梦想就在前方！";
         }
         return "目标差距" + gap + "分，但每一个高分考生都从当下开始。专注每一天，进步看得见！";
+    }
+
+    private ExamRecord getLatestExamRecord(Long studentId) {
+        LambdaQueryWrapper<ExamRecord> query = new LambdaQueryWrapper<>();
+        query.eq(ExamRecord::getStudentId, studentId)
+                .orderByDesc(ExamRecord::getExamDate)
+                .last("LIMIT 1");
+        return this.getOne(query);
+    }
+
+    private void recordGrowthUpgradeIfNeeded(Long studentId, ExamRecord previousRecord, ExamRecord currentRecord) {
+        if (growthRecordMapper == null || currentRecord == null || currentRecord.getCurrentBatch() == null) {
+            return;
+        }
+        String previousBatch = previousRecord == null ? null : previousRecord.getCurrentBatch();
+        String currentBatch = currentRecord.getCurrentBatch();
+        if (previousBatch == null || previousBatch.equals(currentBatch)) {
+            return;
+        }
+        if (batchLevel(currentBatch) <= batchLevel(previousBatch)) {
+            return;
+        }
+        GrowthRecord record = new GrowthRecord();
+        record.setStudentId(studentId);
+        record.setPreviousBatch(batchDisplayName(previousBatch));
+        record.setCurrentBatch(batchDisplayName(currentBatch));
+        record.setScoreAtUpgrade(currentRecord.getEquivalentGaokaoScore());
+        record.setAiIncentiveText(incentiveService != null
+                ? incentiveService.generateUpgradeIncentive(batchDisplayName(previousBatch), batchDisplayName(currentBatch), currentRecord.getEquivalentGaokaoScore())
+                : "段位已升级，继续保持当前学习节奏。");
+        growthRecordMapper.insert(record);
+    }
+
+    private int batchLevel(String batch) {
+        if ("985".equals(batch)) return 5;
+        if ("211".equals(batch)) return 4;
+        if ("first_class".equals(batch)) return 3;
+        if ("second_class".equals(batch)) return 2;
+        return 1;
     }
 }

@@ -7,7 +7,6 @@ import java.util.List;
 /**
  * 高考数据爬虫
  * 对接LLM API进行数据抓取和结构化
- * 当前为占位实现
  */
 public interface GaokaoDataCrawler {
 

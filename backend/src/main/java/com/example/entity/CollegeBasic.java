@@ -29,4 +29,15 @@ public class CollegeBasic implements Serializable {
 
     @TableField("last_crawled")
     private Date lastCrawled;
+
+    @TableField("min_rank")
+    private Integer minRank;
+
+    @TableField("max_rank")
+    private Integer maxRank;
+
+    private String province;
+
+    @TableField("`year`")
+    private Integer year;
 }

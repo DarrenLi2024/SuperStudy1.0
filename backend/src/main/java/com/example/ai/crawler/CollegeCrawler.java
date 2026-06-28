@@ -7,7 +7,6 @@ import java.util.List;
 /**
  * 院校素材爬虫
  * 抓取院校官方LOGO、名称、批次
- * 当前为占位实现
  */
 public interface CollegeCrawler {
 

@@ -15,6 +15,7 @@ public class ScoreRank implements Serializable {
     @TableId(value = "id", type = IdType.AUTO)
     private Long id;
 
+    @TableField("`year`")
     private Integer year;
 
     @TableField("subject_type")

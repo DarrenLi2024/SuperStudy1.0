@@ -26,6 +26,7 @@ frontend/dist/
 # === Environment (secrets) ===
 .env
 backend/src/main/resources/application-local.yml
+backend/src/main/resources/application-dev.yml
 
 # === Temp / OS ===
 *.swp

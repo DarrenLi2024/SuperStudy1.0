@@ -88,6 +88,10 @@ CREATE TABLE IF NOT EXISTS college_basic (
   logo_path VARCHAR(255) COMMENT 'LOGO存储路径',
   admission_batch VARCHAR(50) COMMENT '录取批次',
   subject_type ENUM('physics', 'history', 'both') COMMENT '科类',
+  min_rank INT COMMENT '稳妥位次下界',
+  max_rank INT COMMENT '稳妥位次上界',
+  province VARCHAR(50) DEFAULT '河南' COMMENT '适用省份',
+  year INT DEFAULT 2025 COMMENT '参考年份',
   last_crawled TIMESTAMP COMMENT '抓取更新时间',
   UNIQUE KEY uk_name (college_name),
   INDEX idx_batch (admission_batch)
@@ -110,8 +114,13 @@ CREATE TABLE IF NOT EXISTS ai_question_bank (
   knowledge_point VARCHAR(100) COMMENT '知识点',
   difficulty ENUM('basic', 'medium', 'hard') COMMENT '难度',
   question_content TEXT NOT NULL COMMENT '题目内容',
+  options_json JSON COMMENT '选项JSON',
   answer TEXT COMMENT '答案',
+  analysis TEXT COMMENT '解析',
   score_range_tag VARCHAR(50) COMMENT '适配分数段标签',
+  quality_score DECIMAL(4,2) DEFAULT 0.85 COMMENT '质量评分',
+  usage_count INT DEFAULT 0 COMMENT '使用次数',
+  source_type VARCHAR(20) DEFAULT 'AI' COMMENT '来源类型',
   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
   updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
   INDEX idx_subject_difficulty (subject, difficulty)
@@ -121,51 +130,51 @@ CREATE TABLE IF NOT EXISTS ai_question_bank (
 -- 初始用户数据
 -- ========================
 INSERT INTO sys_user (username, password, role, student_id, status) VALUES
-('admin', '$2a$10$N9qo8uLOickgx2ZMRZoMye.IjzqAKL9xL5jvMFVdNJHvGCgTq/VEq', 'admin', NULL, 1),
-('student001', '$2a$10$N9qo8uLOickgx2ZMRZoMye.IjzqAKL9xL5jvMFVdNJHvGCgTq/VEq', 'student', 1, 1),
-('parent001', '$2a$10$N9qo8uLOickgx2ZMRZoMye.IjzqAKL9xL5jvMFVdNJHvGCgTq/VEq', 'parent', 1, 1);
+('admin', '$2a$10$5zLGHK6AEmomhVeueoa0tOPfvc22w7sKBwH69eheOy0E/rXGD9H8i', 'admin', NULL, 1),
+('student001', '$2a$10$5zLGHK6AEmomhVeueoa0tOPfvc22w7sKBwH69eheOy0E/rXGD9H8i', 'student', 1, 1),
+('parent001', '$2a$10$5zLGHK6AEmomhVeueoa0tOPfvc22w7sKBwH69eheOy0E/rXGD9H8i', 'parent', 1, 1);
 
 INSERT INTO student_profile (user_id, grade, subject_combination, gaokao_mode, target_score, dream_college, dream_college_batch, baseline_score, remaining_days) VALUES
-(1, '高二', '历史+政治+地理', '新高考3+1+2', 600, '北京大学', '双一流', 450, 710);
+(2, '高二', '历史+政治+地理', '新高考3+1+2', 600, '北京大学', '双一流', 450, 710);
 
 -- ========================
 -- 院校种子数据
 -- ========================
-INSERT INTO college_basic (college_name, logo_path, admission_batch, subject_type) VALUES
+INSERT INTO college_basic (college_name, logo_path, admission_batch, subject_type, min_rank, max_rank, province, `year`) VALUES
 -- 985/双一流
-('北京大学', '/logos/default.svg', '985', 'both'),
-('清华大学', '/logos/default.svg', '985', 'both'),
-('复旦大学', '/logos/default.svg', '985', 'both'),
-('上海交通大学', '/logos/default.svg', '985', 'both'),
-('浙江大学', '/logos/default.svg', '985', 'both'),
-('南京大学', '/logos/default.svg', '985', 'both'),
-('武汉大学', '/logos/default.svg', '985', 'both'),
-('中山大学', '/logos/default.svg', '985', 'both'),
--- 211
-('郑州大学', '/logos/default.svg', '211', 'both'),
-('南昌大学', '/logos/default.svg', '211', 'both'),
-('云南大学', '/logos/default.svg', '211', 'both'),
-('广西大学', '/logos/default.svg', '211', 'both'),
-('贵州大学', '/logos/default.svg', '211', 'both'),
-('海南大学', '/logos/default.svg', '211', 'both'),
-('宁夏大学', '/logos/default.svg', '211', 'both'),
+('北京大学', '/logos/default.svg', '985', 'both', 500, 3000, '河南', 2025),
+('清华大学', '/logos/default.svg', '985', 'both', 500, 3000, '河南', 2025),
+('复旦大学', '/logos/default.svg', '985', 'both', 1500, 5000, '河南', 2025),
+('上海交通大学', '/logos/default.svg', '985', 'both', 1500, 5000, '河南', 2025),
+('浙江大学', '/logos/default.svg', '985', 'both', 2000, 6000, '河南', 2025),
+('南京大学', '/logos/default.svg', '985', 'both', 2500, 6500, '河南', 2025),
+('武汉大学', '/logos/default.svg', '985', 'both', 5000, 12000, '河南', 2025),
+('中山大学', '/logos/default.svg', '985', 'both', 6000, 14000, '河南', 2025),
+-- 211（物理类位次前50000，历史类前30000）
+('郑州大学', '/logos/default.svg', '211', 'both', 10000, 35000, '河南', 2025),
+('南昌大学', '/logos/default.svg', '211', 'both', 15000, 45000, '河南', 2025),
+('云南大学', '/logos/default.svg', '211', 'both', 18000, 48000, '河南', 2025),
+('广西大学', '/logos/default.svg', '211', 'both', 20000, 50000, '河南', 2025),
+('贵州大学', '/logos/default.svg', '211', 'both', 20000, 50000, '河南', 2025),
+('海南大学', '/logos/default.svg', '211', 'both', 25000, 55000, '河南', 2025),
+('宁夏大学', '/logos/default.svg', '211', 'both', 28000, 58000, '河南', 2025),
 -- 普通一本
-('河南大学', '/logos/default.svg', 'first_class', 'both'),
-('河北师范大学', '/logos/default.svg', 'first_class', 'both'),
-('山西大学', '/logos/default.svg', 'first_class', 'both'),
-('安徽师范大学', '/logos/default.svg', 'first_class', 'both'),
-('福建师范大学', '/logos/default.svg', 'first_class', 'both'),
-('江西师范大学', '/logos/default.svg', 'first_class', 'both'),
-('湖北大学', '/logos/default.svg', 'first_class', 'both'),
-('湖南科技大学', '/logos/default.svg', 'first_class', 'both'),
+('河南大学', '/logos/default.svg', 'first_class', 'both', 40000, 80000, '河南', 2025),
+('河北师范大学', '/logos/default.svg', 'first_class', 'both', 45000, 85000, '河南', 2025),
+('山西大学', '/logos/default.svg', 'first_class', 'both', 45000, 85000, '河南', 2025),
+('安徽师范大学', '/logos/default.svg', 'first_class', 'both', 50000, 90000, '河南', 2025),
+('福建师范大学', '/logos/default.svg', 'first_class', 'both', 50000, 90000, '河南', 2025),
+('江西师范大学', '/logos/default.svg', 'first_class', 'both', 55000, 95000, '河南', 2025),
+('湖北大学', '/logos/default.svg', 'first_class', 'both', 50000, 90000, '河南', 2025),
+('湖南科技大学', '/logos/default.svg', 'first_class', 'both', 55000, 95000, '河南', 2025),
 -- 公办二本
-('洛阳师范学院', '/logos/default.svg', 'second_class', 'both'),
-('安阳师范学院', '/logos/default.svg', 'second_class', 'both'),
-('南阳理工学院', '/logos/default.svg', 'second_class', 'both'),
-('信阳师范大学', '/logos/default.svg', 'second_class', 'both'),
-('周口师范学院', '/logos/default.svg', 'second_class', 'both'),
-('黄淮学院', '/logos/default.svg', 'second_class', 'both'),
-('平顶山学院', '/logos/default.svg', 'second_class', 'both');
+('洛阳师范学院', '/logos/default.svg', 'second_class', 'both', 100000, 160000, '河南', 2025),
+('安阳师范学院', '/logos/default.svg', 'second_class', 'both', 110000, 170000, '河南', 2025),
+('南阳理工学院', '/logos/default.svg', 'second_class', 'both', 110000, 170000, '河南', 2025),
+('信阳师范大学', '/logos/default.svg', 'second_class', 'both', 120000, 180000, '河南', 2025),
+('周口师范学院', '/logos/default.svg', 'second_class', 'both', 130000, 190000, '河南', 2025),
+('黄淮学院', '/logos/default.svg', 'second_class', 'both', 130000, 190000, '河南', 2025),
+('平顶山学院', '/logos/default.svg', 'second_class', 'both', 140000, 200000, '河南', 2025);
 
 -- ========================
 -- 一分一段种子数据（河南省 2025 历史类模拟）
@@ -248,5 +257,22 @@ INSERT INTO score_rank (year, subject_type, score, rank_value, province) VALUES
 (2025, 'physics', 320, 333500, '河南'),
 (2025, 'physics', 310, 352000, '河南'),
 (2025, 'physics', 300, 371000, '河南');
+
+-- 2024年一分一段数据（近三年参考）
+INSERT INTO score_rank (year, subject_type, score, rank_value, province) VALUES
+(2024, 'history', 600, 7200, '河南'),
+(2024, 'history', 550, 24800, '河南'),
+(2024, 'history', 500, 55500, '河南'),
+(2024, 'history', 450, 98500, '河南'),
+(2024, 'history', 400, 154000, '河南'),
+(2024, 'history', 350, 222000, '河南'),
+(2024, 'history', 300, 301000, '河南'),
+(2024, 'physics', 600, 19000, '河南'),
+(2024, 'physics', 550, 47500, '河南'),
+(2024, 'physics', 500, 88000, '河南'),
+(2024, 'physics', 450, 141000, '河南'),
+(2024, 'physics', 400, 206000, '河南'),
+(2024, 'physics', 350, 284000, '河南'),
+(2024, 'physics', 300, 374000, '河南');
 
 COMMIT;

@@ -6,7 +6,6 @@ import java.util.Map;
 /**
  * 题目生成器
  * 基于LLM生成符合考纲、难度适配的习题
- * 当前为占位实现
  */
 public interface QuestionGenerator {
 

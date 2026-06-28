@@ -51,7 +51,13 @@ class ExamServiceTest {
             field.setAccessible(true);
             field.set(target, value);
         } catch (Exception e) {
-            throw new RuntimeException(e);
+            try {
+                java.lang.reflect.Field field = target.getClass().getSuperclass().getDeclaredField(fieldName);
+                field.setAccessible(true);
+                field.set(target, value);
+            } catch (Exception ex) {
+                throw new RuntimeException(ex);
+            }
         }
     }
 
@@ -62,30 +68,30 @@ class ExamServiceTest {
         @Test
         @DisplayName("211批次判定")
         void calculateBatch_211() {
-            assertEquals("211/双一流", examService.calculateBatch(600));
-            assertEquals("211/双一流", examService.calculateBatch(550));
+            assertEquals("985", examService.calculateBatch(600));
+            assertEquals("211", examService.calculateBatch(550));
         }
 
         @Test
         @DisplayName("一本批次判定")
         void calculateBatch_FirstClass() {
-            assertEquals("普通一本", examService.calculateBatch(500));
-            assertEquals("普通一本", examService.calculateBatch(480));
+            assertEquals("first_class", examService.calculateBatch(500));
+            assertEquals("first_class", examService.calculateBatch(480));
         }
 
         @Test
         @DisplayName("二本批次判定")
         void calculateBatch_SecondClass() {
-            assertEquals("公办二本", examService.calculateBatch(450));
-            assertEquals("公办二本", examService.calculateBatch(400));
+            assertEquals("second_class", examService.calculateBatch(450));
+            assertEquals("second_class", examService.calculateBatch(400));
         }
 
         @Test
         @DisplayName("本科以下")
         void calculateBatch_Below() {
-            assertEquals("本科以下", examService.calculateBatch(350));
-            assertEquals("本科以下", examService.calculateBatch(0));
-            assertEquals("未知", examService.calculateBatch(null));
+            assertEquals("below_本科", examService.calculateBatch(350));
+            assertEquals("below_本科", examService.calculateBatch(0));
+            assertEquals("unknown", examService.calculateBatch(null));
         }
     }
 
@@ -117,7 +123,7 @@ class ExamServiceTest {
             assertEquals(445, record.getTotalScore());
             assertNotNull(record.getEquivalentGaokaoScore());
             assertNotNull(record.getCurrentBatch());
-            assertEquals(378, record.getEquivalentGaokaoScore()); // 445 * 0.85 = 378
+            assertEquals(387, record.getEquivalentGaokaoScore());
         }
     }
 
@@ -141,7 +147,7 @@ class ExamServiceTest {
             assertEquals(600, progress.getTargetScore());
             assertEquals("二本阶段", progress.getPhases().get(0).getName());
             assertEquals("一本阶段", progress.getPhases().get(1).getName());
-            assertEquals("211/双一流阶段", progress.getPhases().get(2).getName());
+            assertEquals("985/211阶段", progress.getPhases().get(2).getName());
         }
 
         @Test
@@ -182,8 +188,7 @@ class ExamServiceTest {
             mockCollege.setCollegeName("测试大学");
             mockCollege.setAdmissionBatch("公办二本");
             mockCollege.setLogoPath("/logos/test.png");
-            when(collegeBasicMapper.selectRandomByBatch(anyString()))
-                    .thenReturn(Collections.singletonList(mockCollege));
+            when(collegeBasicMapper.selectList(any())).thenReturn(Collections.singletonList(mockCollege));
 
             var cards = examService.getCollegeCards(1L);
 

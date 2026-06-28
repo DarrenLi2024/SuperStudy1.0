@@ -3,6 +3,7 @@ package com.example.learning;
 import com.example.dto.response.KnowledgePointDto;
 import com.example.dto.response.TodayTaskResponse;
 import com.example.learning.entity.ErrorQuestion;
+import com.example.security.StudentAccessService;
 import com.example.util.ResponseResult;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.security.access.prepost.PreAuthorize;
@@ -19,11 +20,15 @@ public class LearningController {
     @Autowired
     private LearningService learningService;
 
+    @Autowired
+    private StudentAccessService studentAccessService;
+
     /**
      * 获取今日任务
      */
     @GetMapping("/today/{studentId}")
     public ResponseResult<TodayTaskResponse> getTodayTasks(@PathVariable Long studentId) {
+        studentAccessService.assertReadable(studentId);
         TodayTaskResponse response = learningService.getTodayTasks(studentId);
         return ResponseResult.success(response);
     }
@@ -44,6 +49,7 @@ public class LearningController {
      */
     @GetMapping("/errors/{studentId}")
     public ResponseResult<List<ErrorQuestion>> getErrorQuestions(@PathVariable Long studentId) {
+        studentAccessService.assertReadable(studentId);
         List<ErrorQuestion> errors = learningService.getErrorQuestions(studentId);
         return ResponseResult.success(errors);
     }
@@ -54,6 +60,8 @@ public class LearningController {
     @PostMapping("/errors")
     @PreAuthorize("hasRole('student')")
     public ResponseResult<Void> recordError(@RequestBody ErrorQuestion question) {
+        Long studentId = studentAccessService.requireCurrentStudentId();
+        question.setStudentId(studentId);
         learningService.recordErrorQuestion(question);
         return ResponseResult.success();
     }
@@ -63,6 +71,7 @@ public class LearningController {
      */
     @GetMapping("/knowledge/{studentId}")
     public ResponseResult<Map<String, List<KnowledgePointDto>>> getKnowledgeStatus(@PathVariable Long studentId) {
+        studentAccessService.assertReadable(studentId);
         Map<String, List<KnowledgePointDto>> result = learningService.getKnowledgeStatus(studentId);
         return ResponseResult.success(result);
     }

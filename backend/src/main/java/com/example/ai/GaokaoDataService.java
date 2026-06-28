@@ -7,7 +7,6 @@ import java.util.List;
 /**
  * 高考数据智能抓取服务
  * 定时任务触发LLM，抓取各省教育考试院一分一段数据
- * 当前为接口定义 + Mock实现，后续对接真实LLM
  */
 public interface GaokaoDataService {
 

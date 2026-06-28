@@ -39,7 +39,8 @@ public class StudentController {
     public ResponseResult<StudentProfileVO> getProfile(@PathVariable Long studentId) {
         Long userId = SecurityUtils.getCurrentUserId();
         String role = SecurityUtils.getCurrentRole();
-        StudentProfileVO vo = studentService.getProfile(studentId, userId, role, null);
+        Long boundStudentId = SecurityUtils.getCurrentStudentId();
+        StudentProfileVO vo = studentService.getProfile(studentId, userId, role, boundStudentId);
         return ResponseResult.success(vo);
     }
 

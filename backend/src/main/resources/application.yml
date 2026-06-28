@@ -49,6 +49,60 @@ jwt:
   header: Authorization
   prefix: Bearer 
 
+# ========================
+# AI 大模型配置
+# ========================
+# 默认使用 local 模式（确定性降级，不调用远程API）。
+# 生产环境需配置为真实 LLM Provider，支持 OpenAI 协议兼容的所有服务。
+#
+# 配置示例：
+#   DeepSeek:
+#     provider: deepseek
+#     base-url: https://api.deepseek.com/v1/chat/completions
+#     api-key: sk-your-deepseek-api-key
+#     model: deepseek-chat
+#
+#   OpenAI:
+#     provider: openai
+#     base-url: https://api.openai.com/v1/chat/completions
+#     api-key: sk-your-openai-api-key
+#     model: gpt-4o-mini
+#
+#   Ollama (本地):
+#     provider: ollama
+#     base-url: http://localhost:11434/v1/chat/completions
+#     api-key: ollama
+#     model: qwen2.5:7b
+#
+# ========================
+# AI 大模型配置 — 多层覆盖
+# ========================
+# 优先级（高→低）：环境变量 > application-dev.yml > application.yml 默认值
+#
+# 快速启用真实 AI（二选一）：
+#   方式 A — 设环境变量（推荐）：
+#     export AI_LLM_PROVIDER=deepseek
+#     export AI_LLM_BASE_URL=https://api.deepseek.com/v1/chat/completions
+#     export AI_LLM_API_KEY=sk-你的密钥
+#     export AI_LLM_MODEL=deepseek-chat
+#     mvn spring-boot:run
+#
+#   方式 B — 使用 dev profile：
+#     cp docs/application-dev.example.yml src/main/resources/application-dev.yml
+#     编辑 application-dev.yml 填入密钥
+#     SPRING_PROFILES_ACTIVE=dev mvn spring-boot:run
+#
+ai:
+  llm:
+    provider: ${AI_LLM_PROVIDER:local}
+    base-url: ${AI_LLM_BASE_URL:}
+    api-key: ${AI_LLM_API_KEY:}
+    model: ${AI_LLM_MODEL:local-deterministic}
+    timeout-ms: ${AI_LLM_TIMEOUT_MS:5000}
+    max-retries: ${AI_LLM_MAX_RETRIES:1}
+    cache-enabled: true
+    cache-ttl-seconds: 1800
+
 logging:
   level:
     com.example: debug

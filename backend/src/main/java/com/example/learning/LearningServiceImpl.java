@@ -2,6 +2,7 @@ package com.example.learning;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
+import com.example.ai.LearningAnalysisService;
 import com.example.dto.response.KnowledgePointDto;
 import com.example.dto.response.TodayTaskResponse;
 import com.example.learning.entity.ErrorQuestion;
@@ -25,7 +26,10 @@ public class LearningServiceImpl extends ServiceImpl<TaskRecordMapper, TaskRecor
     private ErrorQuestionMapper errorQuestionMapper;
 
     @Autowired
-    private ObjectMapper objectMapper;
+    private ObjectMapper objectMapper = new ObjectMapper();
+
+    @Autowired(required = false)
+    private LearningAnalysisService learningAnalysisService;
 
     @Override
     public TodayTaskResponse getTodayTasks(Long studentId) {
@@ -65,8 +69,8 @@ public class LearningServiceImpl extends ServiceImpl<TaskRecordMapper, TaskRecor
             }
         }
 
-        // 没有今日任务则生成
-        return generateDefaultTasks(studentId);
+        // 没有今日任务则生成并持久化
+        return generateAiTasks(studentId);
     }
 
     @Override
@@ -94,6 +98,11 @@ public class LearningServiceImpl extends ServiceImpl<TaskRecordMapper, TaskRecor
     @Override
     public void recordErrorQuestion(ErrorQuestion question) {
         question.setReinforcementFlag(0);
+        if ((question.getAiAnalysis() == null || question.getAiAnalysis().trim().isEmpty())
+                && learningAnalysisService != null) {
+            question.setAiAnalysis(learningAnalysisService.analyzeErrorCause(
+                    question.getSubject(), question.getQuestionContent(), question.getWrongAnswer()));
+        }
         errorQuestionMapper.insert(question);
     }
 
@@ -120,7 +129,7 @@ public class LearningServiceImpl extends ServiceImpl<TaskRecordMapper, TaskRecor
 
             List<KnowledgePointDto> points = new ArrayList<>();
 
-            // 常见知识点（模拟数据，后续由AI真实分析）
+            // 科目基础知识点目录；真实掌握度由学生错题记录动态计算。
             String[] defaultPoints;
             switch (subject) {
                 case "数学":
@@ -241,5 +250,68 @@ public class LearningServiceImpl extends ServiceImpl<TaskRecordMapper, TaskRecor
                 .aiComment("今日学习任务已为你量身定制，从薄弱环节开始突破，点滴积累终见成效！")
                 .completionRate(0.0)
                 .build();
+    }
+
+    private TodayTaskResponse generateAiTasks(Long studentId) {
+        if (learningAnalysisService == null) {
+            return generateDefaultTasks(studentId);
+        }
+        try {
+            List<Map<String, Object>> rawTasks = learningAnalysisService.generateDailyTasks(studentId);
+            List<TodayTaskResponse.TaskItem> tasks = rawTasks.stream().map(this::toTaskItem).collect(Collectors.toList());
+            String taskContent = objectMapper.writeValueAsString(tasks);
+
+            TaskRecord taskRecord = new TaskRecord();
+            taskRecord.setStudentId(studentId);
+            taskRecord.setTaskDate(new Date());
+            taskRecord.setTaskContent(taskContent);
+            taskRecord.setCompletionRate(BigDecimal.ZERO);
+            taskRecord.setAiComment("今日任务已按你的薄弱学科和错题记录自动生成。");
+            taskRecord.setStatus("pending");
+            this.save(taskRecord);
+
+            return TodayTaskResponse.builder()
+                    .tasks(tasks)
+                    .aiComment(taskRecord.getAiComment())
+                    .completionRate(0.0)
+                    .build();
+        } catch (Exception e) {
+            return generateDefaultTasks(studentId);
+        }
+    }
+
+    private TodayTaskResponse.TaskItem toTaskItem(Map<String, Object> map) {
+        return TodayTaskResponse.TaskItem.builder()
+                .id(asLong(map.get("id")))
+                .type(String.valueOf(map.getOrDefault("type", "知识点巩固")))
+                .content(String.valueOf(map.getOrDefault("content", "")))
+                .subject(String.valueOf(map.getOrDefault("subject", "")))
+                .knowledgePoint(String.valueOf(map.getOrDefault("knowledgePoint", "")))
+                .aiHint(String.valueOf(map.getOrDefault("aiHint", "")))
+                .completionRate(asDouble(map.getOrDefault("completionRate", 0.0)))
+                .status(String.valueOf(map.getOrDefault("status", "pending")))
+                .build();
+    }
+
+    private Long asLong(Object value) {
+        if (value instanceof Number) {
+            return ((Number) value).longValue();
+        }
+        try {
+            return Long.parseLong(String.valueOf(value));
+        } catch (Exception e) {
+            return 0L;
+        }
+    }
+
+    private Double asDouble(Object value) {
+        if (value instanceof Number) {
+            return ((Number) value).doubleValue();
+        }
+        try {
+            return Double.parseDouble(String.valueOf(value));
+        } catch (Exception e) {
+            return 0.0;
+        }
     }
 }

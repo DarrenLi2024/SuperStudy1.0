@@ -38,11 +38,22 @@ class GrowthServiceTest {
 
     private void injectField(Object target, String fieldName, Object value) {
         try {
-            java.lang.reflect.Field field = target.getClass().getDeclaredField(fieldName);
+            java.lang.reflect.Field field = findField(target.getClass(), fieldName);
             field.setAccessible(true);
             field.set(target, value);
         } catch (Exception e) {
             throw new RuntimeException(e);
+        }
+    }
+
+    private java.lang.reflect.Field findField(Class<?> clazz, String fieldName) throws NoSuchFieldException {
+        try {
+            return clazz.getDeclaredField(fieldName);
+        } catch (NoSuchFieldException e) {
+            if (clazz.getSuperclass() != null) {
+                return findField(clazz.getSuperclass(), fieldName);
+            }
+            throw e;
         }
     }
 
