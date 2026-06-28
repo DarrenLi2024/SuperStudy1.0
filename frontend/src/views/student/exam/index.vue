@@ -96,7 +96,8 @@ import { ElMessage } from 'element-plus'
 import { ArrowRight } from '@element-plus/icons-vue'
 import Header from '@/components/Header.vue'
 import AiLoading from '@/components/AiLoading.vue'
-import { getExamRecords } from '@/api/exam'
+import { getExamRecords, submitExam as submitExamApi } from '@/api/exam'
+import { getTrainingQuestions } from '@/api/question'
 import type { ExamRecordItem } from '@/types/growth'
 import { getStudentId } from '@/utils/auth'
 
@@ -106,29 +107,60 @@ const dialogTitle = ref('')
 const currentQuestions = ref<any[]>([])
 const selectedAnswers = ref<Record<number, string>>({})
 const showAnswers = ref(false)
+const currentExamType = ref('weekly')
 
 onMounted(async () => {
   try {
-    const res = await getExamRecords(getStudentId() || 1)
+    const studentId = requireStudentId()
+    if (!studentId) return
+    const res = await getExamRecords(studentId)
     examRecords.value = res.data || []
-  } catch {
-    examRecords.value = getMockRecords()
+  } catch (error: any) {
+    ElMessage.error(error?.message || '考试记录加载失败')
   }
 })
 
-const startExam = (type: string) => {
+const startExam = async (type: string) => {
+  currentExamType.value = type
   dialogTitle.value = type === 'weekly' ? '本周AI全科周测' : '月度真题模考'
   showAnswers.value = false
   selectedAnswers.value = {}
-  currentQuestions.value = generateQuestions(type)
+  currentQuestions.value = []
   showDialog.value = true
+  try {
+    const studentId = requireStudentId()
+    if (!studentId) {
+      showDialog.value = false
+      return
+    }
+    const res = await getTrainingQuestions(studentId, '数学', type === 'weekly' ? 6 : 10)
+    currentQuestions.value = (res.data || []).map((q: any, index: number) => ({ ...q, id: q.id || index + 1 }))
+  } catch (error: any) {
+    showDialog.value = false
+    ElMessage.error(error?.message || 'AI试卷生成失败')
+  }
 }
 
-const submitExam = () => {
-  showAnswers.value = true
+const submitExam = async () => {
   const total = currentQuestions.value.length
   const answered = Object.keys(selectedAnswers.value).length
-  ElMessage.success(`提交成功！共${total}题，已作答${answered}题`)
+  const subjectScores = calculateSubjectScores()
+  try {
+    const today = new Date().toISOString().substring(0, 10)
+    await submitExamApi({
+      examType: currentExamType.value,
+      subjectScores,
+      examDate: today
+    })
+    showAnswers.value = true
+    ElMessage.success(`提交成功！共${total}题，已作答${answered}题`)
+    const studentId = requireStudentId()
+    if (!studentId) return
+    const res = await getExamRecords(studentId)
+    examRecords.value = res.data || []
+  } catch (error: any) {
+    ElMessage.error(error?.message || '考试提交失败')
+  }
 }
 
 const viewDetail = (record: ExamRecordItem) => {
@@ -140,46 +172,36 @@ const formatDate = (date: string) => {
   return date.substring(0, 10)
 }
 
-function generateQuestions(type: string) {
-  // 按高考真题难度排列：基础→中档→较难
-  const templates = [
-    { subject: '语文', difficulty: 'basic', content: '下列词语中加点字的读音全部正确的一项是：', options: ['A. 慰藉(jí) 炽热(zhì)', 'B. 解剖(pōu) 挫折(cuò)', 'C. 酗酒(xiōng) 联袂(mèi)', 'D. 桎梏(kù) 针砭(biān)'], answer: 'B. 解剖(pōu) 挫折(cuò)' },
-    { subject: '数学', difficulty: 'basic', content: '已知集合 A={x|x²-3x+2=0}，B={x|0<x<5,x∈N}，则 A∩B = ?', options: ['A. {1}', 'B. {2}', 'C. {1,2}', 'D. ∅'], answer: 'C. {1,2}' },
-    { subject: '数学', difficulty: 'medium', content: '已知函数 f(x)=ax³+bx²+cx 在 x=1 处有极大值 4，在 x=2 处有极小值 0，求 a+b+c 的值。', options: ['A. 2', 'B. 4', 'C. 6', 'D. 8'], answer: 'C. 6' },
-    { subject: '数学', difficulty: 'hard', content: '椭圆 C: x²/9 + y²/4 = 1 的左、右焦点分别为 F₁, F₂，点 P 为椭圆 C 上一点，且 ∠F₁PF₂=60°，则 △F₁PF₂ 的面积为：', options: ['A. 2√3', 'B. 4√3/3', 'C. 4√3', 'D. 8√3/3'], answer: 'B. 4√3/3' },
-    { subject: '英语', difficulty: 'basic', content: 'The experiment, ___ will be conducted next month, aims to test the new drug\'s effectiveness.', options: ['A. that', 'B. which', 'C. what', 'D. whose'], answer: 'B. which' },
-    { subject: '英语', difficulty: 'medium', content: 'Not until she arrived at the airport ___ that she had left her passport at home.', options: ['A. she realized', 'B. did she realize', 'C. she did realize', 'D. had she realized'], answer: 'B. did she realize' },
-    { subject: '历史', difficulty: 'basic', content: '明清时期，我国统一多民族国家进一步巩固。下列属于清政府巩固统一措施的是：', options: ['A. 设立西域都护', 'B. 设立宣政院', 'C. 设立驻藏大臣', 'D. 设立安西都护府'], answer: 'C. 设立驻藏大臣' },
-    { subject: '历史', difficulty: 'medium', content: '1915年，陈独秀在上海创办《青年杂志》，新文化运动由此开始。新文化运动提倡的"德先生"和"赛先生"分别指：', options: ['A. 民主与科学', 'B. 自由与平等', 'C. 法治与科学', 'D. 民主与自由'], answer: 'A. 民主与科学' },
-    { subject: '地理', difficulty: 'basic', content: '我国地势西高东低，呈阶梯状分布。其中第一级阶梯平均海拔在：', options: ['A. 1000米以上', 'B. 2000米以上', 'C. 4000米以上', 'D. 500米以上'], answer: 'C. 4000米以上' },
-    { subject: '地理', difficulty: 'medium', content: '下图为某地地质剖面示意图，图中岩层由老到新的顺序是：', options: ['A. ①②③④', 'B. ②①④③', 'C. ③④①②', 'D. ④③②①'], answer: 'A. ①②③④' },
-    { subject: '政治', difficulty: 'basic', content: '我国的根本政治制度是：', options: ['A. 社会主义制度', 'B. 人民代表大会制度', 'C. 中国共产党领导的多党合作和政治协商制度', 'D. 民族区域自治制度'], answer: 'B. 人民代表大会制度' },
-    { subject: '政治', difficulty: 'medium', content: '2025年中央经济工作会议强调，要实施更加积极的财政政策和适度宽松的货币政策。下列属于积极财政政策措施的是：', options: ['A. 提高存款准备金率', 'B. 增加地方政府专项债券发行', 'C. 提高贷款利率', 'D. 减少财政支出'], answer: 'B. 增加地方政府专项债券发行' },
-  ]
-  const count = type === 'weekly' ? 6 : 10
-  // 打乱后取 count 道题，保证难度均衡
-  const shuffled = [...templates].sort(() => Math.random() - 0.5)
-  const basics = shuffled.filter(t => t.difficulty === 'basic')
-  const mediums = shuffled.filter(t => t.difficulty === 'medium')
-  const hards = shuffled.filter(t => t.difficulty === 'hard')
-  const selected = [
-    ...basics.slice(0, Math.ceil(count * 0.5)),
-    ...mediums.slice(0, Math.ceil(count * 0.35)),
-    ...hards.slice(0, Math.ceil(count * 0.15))
-  ].slice(0, count)
-  return selected.map((t, i) => ({ ...t, id: i + 1 }))
+function calculateSubjectScores() {
+  const subjects = ['语文', '数学', '英语', '历史', '政治', '地理']
+  const scores: Record<string, number> = Object.fromEntries(subjects.map(subject => [subject, 0]))
+  const totals: Record<string, number> = Object.fromEntries(subjects.map(subject => [subject, 0]))
+  currentQuestions.value.forEach((question) => {
+    const subject = question.subject || '数学'
+    const weight = question.difficulty === 'hard' ? 18 : question.difficulty === 'medium' ? 14 : 10
+    totals[subject] = (totals[subject] || 0) + weight
+    const selected = selectedAnswers.value[question.id]
+    if (selected && selected === question.answer) {
+      scores[subject] = (scores[subject] || 0) + weight
+    }
+  })
+  subjects.forEach((subject) => {
+    if (totals[subject] === 0) {
+      scores[subject] = 60
+    } else {
+      scores[subject] = Math.round((scores[subject] / totals[subject]) * 100)
+    }
+  })
+  return scores
 }
 
-function getMockRecords(): ExamRecordItem[] {
-  // 模拟提分过程：分数逐步上升，位次稳步前进
-  return [
-    { id: 1, examType: 'monthly', subjectScores: '{}', totalScore: 385, equivalentGaokaoScore: 327, equivalentRank: 105000, currentBatch: '本科以下', examDate: '2026-03-15', aiDiagnosisReport: '', createdAt: '' },
-    { id: 2, examType: 'weekly', subjectScores: '{}', totalScore: 395, equivalentGaokaoScore: 336, equivalentRank: 98500, currentBatch: '本科以下', examDate: '2026-04-12', aiDiagnosisReport: '', createdAt: '' },
-    { id: 3, examType: 'monthly', subjectScores: '{}', totalScore: 410, equivalentGaokaoScore: 349, equivalentRank: 92000, currentBatch: '本科以下', examDate: '2026-04-26', aiDiagnosisReport: '', createdAt: '' },
-    { id: 4, examType: 'weekly', subjectScores: '{}', totalScore: 425, equivalentGaokaoScore: 361, equivalentRank: 86000, currentBatch: '本科以下', examDate: '2026-05-10', aiDiagnosisReport: '', createdAt: '' },
-    { id: 5, examType: 'weekly', subjectScores: '{}', totalScore: 440, equivalentGaokaoScore: 374, equivalentRank: 80000, currentBatch: '本科以下', examDate: '2026-05-24', aiDiagnosisReport: '', createdAt: '' },
-    { id: 6, examType: 'monthly', subjectScores: '{}', totalScore: 455, equivalentGaokaoScore: 387, equivalentRank: 73000, currentBatch: '本科以下', examDate: '2026-06-15', aiDiagnosisReport: '', createdAt: '' },
-  ]
+function requireStudentId() {
+  const studentId = getStudentId()
+  if (!studentId) {
+    ElMessage.error('未获取到绑定学生信息，请重新登录')
+    return null
+  }
+  return studentId
 }
 </script>
 

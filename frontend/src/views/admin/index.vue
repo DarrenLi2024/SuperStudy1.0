@@ -242,9 +242,10 @@ async function loadUsers() {
     const res = await getUserList({ page: page.value, size: size.value })
     userList.value = res.data.list || []
     total.value = res.data.total || 0
-  } catch {
-    userList.value = getMockUsers()
-    total.value = 2
+  } catch (error: any) {
+    userList.value = []
+    total.value = 0
+    ElMessage.error(error?.message || '用户列表加载失败')
   }
 }
 
@@ -257,10 +258,8 @@ async function doCreateUser() {
     showCreateDialog.value = false
     createForm.username = ''; createForm.password = ''; createForm.role = 'student'; createForm.studentId = 0
     loadUsers()
-  } catch {
-    ElMessage.success('用户创建成功（Mock）')
-    showCreateDialog.value = false
-    loadUsers()
+  } catch (error: any) {
+    ElMessage.error(error?.message || '用户创建失败')
   }
 }
 
@@ -270,9 +269,8 @@ async function toggleStatus(row: any) {
     await updateUserStatus(row.id, { status: newStatus })
     ElMessage.success(newStatus === 1 ? '已启用' : '已禁用')
     loadUsers()
-  } catch {
-    ElMessage.success(row.status === 1 ? '已禁用（Mock）' : '已启用（Mock）')
-    row.status = row.status === 1 ? 0 : 1
+  } catch (error: any) {
+    ElMessage.error(error?.message || '状态更新失败')
   }
 }
 
@@ -280,8 +278,8 @@ async function resetPwd(row: any) {
   try {
     const res = await resetPassword(row.id)
     ElMessage.success(`密码已重置为：${res.data.newPassword}`)
-  } catch {
-    ElMessage.success('密码已重置为：123456')
+  } catch (error: any) {
+    ElMessage.error(error?.message || '密码重置失败')
   }
 }
 
@@ -290,8 +288,8 @@ async function loadMonitor() {
   try {
     const res = await getMonitor()
     monitor.value = res.data
-  } catch {
-    monitor.value = getMockMonitor()
+  } catch (error: any) {
+    ElMessage.error(error?.message || '监控数据加载失败')
   }
 }
 
@@ -310,8 +308,8 @@ async function saveAiConfig() {
   try {
     await updateAiConfig({ ...aiConfig })
     ElMessage.success('配置保存成功')
-  } catch {
-    ElMessage.success('配置保存成功（Mock）')
+  } catch (error: any) {
+    ElMessage.error(error?.message || '配置保存失败')
   }
 }
 
@@ -328,22 +326,6 @@ const handleLogout = () => {
   router.push('/login')
 }
 
-function getMockUsers() {
-  return [
-    { id: 1, username: 'admin', role: 'admin', studentId: null, status: 1, createdAt: '2026-06-28T10:00:00' },
-    { id: 2, username: 'student001', role: 'student', studentId: 1, status: 1, createdAt: '2026-06-28T10:00:00' }
-  ]
-}
-
-function getMockMonitor() {
-  return {
-    serverInfo: { cpuUsage: 45.2, memoryUsage: 62.8, diskUsage: 38.5 },
-    databaseStatus: '正常', redisStatus: '正常',
-    backupStatus: { lastBackupTime: '2026-06-28 04:00:00', backupCount: 28, status: '正常' },
-    aiStatus: { modelName: 'LLM (待配置)', apiStatus: '未连接', lastCallTime: '暂无记录' },
-    apiStats: []
-  }
-}
 </script>
 
 <style scoped lang="scss">

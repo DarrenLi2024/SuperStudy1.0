@@ -65,6 +65,26 @@
         </el-card>
       </section>
     </div>
+
+    <!-- 段位升级庆祝弹窗 -->
+    <el-dialog v-model="showUpgradeModal" :title="null" width="400px" class="upgrade-dialog" :close-on-click-modal="false" :show-close="false">
+      <div class="upgrade-celebration">
+        <div class="upgrade-animation">🎉🎊🏆</div>
+        <div class="upgrade-title">恭喜升段！</div>
+        <div class="upgrade-badge" v-if="latestUpgrade">
+          {{ latestUpgrade.previousBatch }} → {{ latestUpgrade.currentBatch }}
+        </div>
+        <div class="upgrade-score" v-if="latestUpgrade">
+          升级分数：{{ latestUpgrade.scoreAtUpgrade }}分
+        </div>
+        <div class="upgrade-incentive" v-if="latestUpgrade?.aiIncentiveText">
+          💬 {{ latestUpgrade.aiIncentiveText }}
+        </div>
+        <div class="upgrade-actions">
+          <el-button type="primary" round @click="showUpgradeModal = false">继续加油！</el-button>
+        </div>
+      </div>
+    </el-dialog>
   </div>
 </template>
 
@@ -76,6 +96,7 @@ import { getGrowthData, getGrowthHistory } from '@/api/growth'
 import type { GrowthData, GrowthRecordItem } from '@/types/growth'
 import * as echarts from 'echarts'
 import { getStudentId } from '@/utils/auth'
+import { ElMessage } from 'element-plus'
 
 const loading = ref(true)
 const scoreChartRef = ref<HTMLElement>()
@@ -86,32 +107,49 @@ const subjectNames = ref<string[]>([])
 const historyRecords = ref<GrowthRecordItem[]>([])
 const monthlyReport = ref('')
 const growthData = ref<GrowthData>({ scoreTrend: [], rankTrend: [], subjectTrends: {}, monthlyReport: '' })
+const showUpgradeModal = ref(false)
+const latestUpgrade = ref<GrowthRecordItem | null>(null)
 
 onMounted(async () => {
   try {
+    const studentId = requireStudentId()
+    if (!studentId) return
     const [dataRes, historyRes] = await Promise.allSettled([
-      getGrowthData(getStudentId() || 1),
-      getGrowthHistory(getStudentId() || 1)
+      getGrowthData(studentId),
+      getGrowthHistory(studentId)
     ])
 
     if (dataRes.status === 'fulfilled') {
       growthData.value = dataRes.value.data
     } else {
-      growthData.value = getMockGrowthData()
+      throw dataRes.reason
     }
 
     if (historyRes.status === 'fulfilled') {
       historyRecords.value = historyRes.value.data || []
     } else {
-      historyRecords.value = getMockHistory()
+      throw historyRes.reason
     }
-  } catch {
-    growthData.value = getMockGrowthData()
-    historyRecords.value = getMockHistory()
+  } catch (error: any) {
+    ElMessage.error(error?.message || '成长数据加载失败')
   }
 
-  monthlyReport.value = growthData.value.monthlyReport || 'AI月报将在后续版本中自动生成。'
+  monthlyReport.value = growthData.value.monthlyReport || '【AI月度成长总结】本月数据已汇总，建议继续按薄弱学科优先级推进复盘。'
   subjectNames.value = Object.keys(growthData.value.subjectTrends || {})
+
+  // 检查是否有最近新增的段位升级记录，自动弹出庆祝弹窗
+  if (historyRecords.value.length > 0) {
+    const first = historyRecords.value[0]
+    if (first.upgradeTime) {
+      const upgradeTime = new Date(first.upgradeTime).getTime()
+      const now = Date.now()
+      // 如果升级发生在最近24小时内，弹出庆祝弹窗
+      if (now - upgradeTime < 24 * 60 * 60 * 1000) {
+        latestUpgrade.value = first
+        showUpgradeModal.value = true
+      }
+    }
+  }
 
   await nextTick()
   renderCharts()
@@ -197,36 +235,16 @@ function renderSubjectChart(subject: string) {
   window.addEventListener('resize', () => chart.resize())
 }
 
-function getMockGrowthData(): GrowthData {
-  return {
-    scoreTrend: [
-      { date: '2026-04-01', score: 380 }, { date: '2026-04-15', score: 395 },
-      { date: '2026-05-01', score: 410 }, { date: '2026-05-15', score: 425 },
-      { date: '2026-06-01', score: 440 }, { date: '2026-06-15', score: 450 }
-    ],
-    rankTrend: [
-      { date: '2026-04-01', rank: 120000 }, { date: '2026-04-15', rank: 115000 },
-      { date: '2026-05-01', rank: 108000 }, { date: '2026-05-15', rank: 100000 },
-      { date: '2026-06-01', rank: 92000 }, { date: '2026-06-15', rank: 85000 }
-    ],
-    subjectTrends: {
-      '语文': [{ date: '2026-04-01', score: 85 }, { date: '2026-05-01', score: 88 }, { date: '2026-06-01', score: 90 }],
-      '数学': [{ date: '2026-04-01', score: 55 }, { date: '2026-05-01', score: 62 }, { date: '2026-06-01', score: 70 }],
-      '英语': [{ date: '2026-04-01', score: 75 }, { date: '2026-05-01', score: 78 }, { date: '2026-06-01', score: 82 }],
-      '历史': [{ date: '2026-04-01', score: 60 }, { date: '2026-05-01', score: 65 }, { date: '2026-06-01', score: 68 }],
-      '政治': [{ date: '2026-04-01', score: 58 }, { date: '2026-05-01', score: 62 }, { date: '2026-06-01', score: 65 }],
-      '地理': [{ date: '2026-04-01', score: 62 }, { date: '2026-05-01', score: 66 }, { date: '2026-06-01', score: 70 }]
-    },
-    monthlyReport: ''
+function requireStudentId() {
+  const studentId = getStudentId()
+  if (!studentId) {
+    ElMessage.error('未获取到绑定学生信息，请重新登录')
+    loading.value = false
+    return null
   }
+  return studentId
 }
 
-function getMockHistory(): GrowthRecordItem[] {
-  return [
-    { id: 1, studentId: 1, previousBatch: '本科以下', currentBatch: '本科以下', scoreAtUpgrade: 380, upgradeTime: '2026-04-01', aiIncentiveText: '起点虽低，但未来可期！每一分努力都会有回报。' },
-    { id: 2, studentId: 1, previousBatch: '本科以下', currentBatch: '本科以下', scoreAtUpgrade: 425, upgradeTime: '2026-05-15', aiIncentiveText: '持续进步中！距离公办二本仅差一步之遥。' },
-  ]
-}
 </script>
 
 <style scoped lang="scss">
@@ -316,5 +334,62 @@ function getMockHistory(): GrowthRecordItem[] {
   color: #606266;
   line-height: 1.8;
   white-space: pre-wrap;
+}
+
+// 升级弹窗
+.upgrade-dialog :deep(.el-dialog__body) {
+  padding: 0;
+}
+
+.upgrade-celebration {
+  text-align: center;
+  padding: 32px 24px;
+}
+
+.upgrade-animation {
+  font-size: 48px;
+  margin-bottom: 16px;
+  animation: pulse 1.5s ease-in-out infinite;
+}
+
+@keyframes pulse {
+  0%, 100% { transform: scale(1); }
+  50% { transform: scale(1.15); }
+}
+
+.upgrade-title {
+  font-size: 24px;
+  font-weight: 700;
+  color: #e6a23c;
+  margin-bottom: 16px;
+}
+
+.upgrade-badge {
+  display: inline-block;
+  font-size: 16px;
+  font-weight: 600;
+  color: #67c23a;
+  background: #f0f9eb;
+  padding: 6px 20px;
+  border-radius: 20px;
+  margin-bottom: 12px;
+}
+
+.upgrade-score {
+  font-size: 14px;
+  color: #606266;
+  margin-bottom: 12px;
+}
+
+.upgrade-incentive {
+  font-size: 14px;
+  color: #909399;
+  font-style: italic;
+  margin-bottom: 24px;
+  line-height: 1.6;
+}
+
+.upgrade-actions {
+  margin-top: 8px;
 }
 </style>

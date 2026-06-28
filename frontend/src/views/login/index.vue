@@ -17,8 +17,7 @@
         </el-form-item>
       </el-form>
       <div class="login-tips">
-        <p>测试账号：admin / admin123</p>
-        <p>学生端：任意账号密码即可登录（Mock模式）</p>
+        <p>全链路AI自治 · 零人工运维 · 精准段位激励</p>
       </div>
     </div>
   </div>
@@ -45,35 +44,6 @@ const rules: FormRules = {
   password: [{ required: true, message: '请输入密码', trigger: 'blur' }]
 }
 
-/**
- * Mock 登录降级 — 后端不可用时使用本地模拟
- */
-function mockLogin(username: string, password: string) {
-  // admin 账号需要密码校验
-  if (username === 'admin' && password !== 'admin123') {
-    throw new Error('密码错误')
-  }
-
-  let role = 'student'
-  let nickname = '学生用户'
-  let id = 2
-
-  if (username === 'admin') {
-    role = 'admin'
-    nickname = '管理员'
-    id = 1
-  } else if (username === 'parent') {
-    role = 'parent'
-    nickname = '家长'
-    id = 3
-  }
-
-  const token = 'mock-jwt-token-' + Date.now()
-  const user = { id, username, role, nickname, studentId: role === 'student' ? 1 : null }
-
-  return { token, user }
-}
-
 const handleLogin = async () => {
   if (!loginForm.value) return
   await loginForm.value.validate(async (valid) => {
@@ -87,14 +57,8 @@ const handleLogin = async () => {
         })
         const { token, user } = res.data
         doLogin(token, user)
-      } catch {
-        // 后端不可用 → Mock 降级（任何错误都降级）
-        try {
-          const mock = mockLogin(form.username, form.password)
-          doLogin(mock.token, mock.user)
-        } catch {
-          ElMessage.error('账号或密码错误')
-        }
+      } catch (error: any) {
+        ElMessage.error(error?.message || '账号或密码错误')
       } finally {
         loading.value = false
       }
@@ -108,22 +72,13 @@ function doLogin(token: string, user: any) {
     id: user.id,
     username: user.username,
     role: user.role,
+    studentId: user.studentId || null,
     nickname: user.role === 'admin' ? '管理员' : user.role === 'parent' ? '家长' : '学生用户'
   })
   ElMessage.success('登录成功')
   if (user.role === 'admin') {
     router.push('/admin')
   } else if (user.role === 'parent') {
-    router.push('/parent')
-  } else {
-    router.push('/student')
-  }
-}
-
-function redirectByRole(role: string) {
-  if (role === 'admin') {
-    router.push('/admin')
-  } else if (role === 'parent') {
     router.push('/parent')
   } else {
     router.push('/student')

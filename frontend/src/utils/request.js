@@ -31,6 +31,7 @@ service.interceptors.response.use(
         clearAuth()
         router.push('/login')
       }
+      ElMessage.error(res.message || '请求失败')
       return Promise.reject(new Error(res.message || '请求失败'))
     }
     return res
@@ -44,7 +45,7 @@ service.interceptors.response.use(
         router.push('/login')
       }
     }
-    // 不弹错误提示 — 各页面有 Mock 降级
+    ElMessage.error(error.response?.data?.message || error.message || '网络请求失败')
     return Promise.reject(error)
   }
 )

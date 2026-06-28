@@ -54,22 +54,7 @@
       <section class="section">
         <h3 class="section-title">📊 知识点掌握图谱</h3>
         <el-card shadow="never" class="knowledge-card">
-          <div v-if="knowledgeData.length > 0" class="knowledge-grid">
-            <div v-for="subject in knowledgeData" :key="subject.subject" class="knowledge-subject">
-              <h4 class="ks-title">{{ subject.subject }}</h4>
-              <div class="ks-points">
-                <div v-for="point in subject.knowledgePoints" :key="point.name" class="ks-point">
-                  <div class="ks-point-name">{{ point.name }}</div>
-                  <el-progress
-                    :percentage="point.masteryLevel"
-                    :color="point.masteryLevel >= 70 ? '#67c23a' : point.masteryLevel >= 40 ? '#e6a23c' : '#f56c6c'"
-                    :stroke-width="8"
-                    :text-inside="true"
-                  />
-                </div>
-              </div>
-            </div>
-          </div>
+          <KnowledgeHeatmap v-if="knowledgeData.length > 0" :data="knowledgeData" />
           <AiLoading v-else text="正在分析知识点掌握情况..." />
         </el-card>
       </section>
@@ -82,6 +67,7 @@ import { ref, onMounted } from 'vue'
 import { ElMessage } from 'element-plus'
 import Header from '@/components/Header.vue'
 import AiLoading from '@/components/AiLoading.vue'
+import KnowledgeHeatmap from '@/components/KnowledgeHeatmap.vue'
 import { getErrorQuestions, getKnowledgeStatus } from '@/api/learning'
 import { getStudentId } from '@/utils/auth'
 
@@ -97,13 +83,17 @@ const knowledgeData = ref<KnowledgeSubject[]>([])
 
 onMounted(async () => {
   try {
+    const studentId = requireStudentId()
+    if (!studentId) return
     const [errRes, knowRes] = await Promise.allSettled([
-      getErrorQuestions(getStudentId() || 1),
-      getKnowledgeStatus(getStudentId() || 1)
+      getErrorQuestions(studentId),
+      getKnowledgeStatus(studentId)
     ])
 
     if (errRes.status === 'fulfilled') {
       errors.value = errRes.value.data || []
+    } else {
+      throw errRes.reason
     }
 
     if (knowRes.status === 'fulfilled') {
@@ -112,68 +102,52 @@ onMounted(async () => {
         subject,
         knowledgePoints: points.map((p: any) => ({ name: p.name, masteryLevel: p.masteryLevel || 0, status: p.status || 'normal' }))
       }))
+    } else {
+      throw knowRes.reason
     }
-  } catch {
-    // 使用Mock数据
-    errors.value = getMockErrors()
-    knowledgeData.value = getMockKnowledge()
+  } catch (error: any) {
+    ElMessage.error(error?.message || '学习数据加载失败')
   }
 
-  // 默认掌握数据
-  const mockSubjects: SubjectMastery[] = [
-    { name: '语文', icon: '📖', mastery: 65 },
-    { name: '数学', icon: '📐', mastery: 38 },
-    { name: '英语', icon: '🌍', mastery: 55 },
-    { name: '历史', icon: '🏛️', mastery: 72 },
-    { name: '政治', icon: '📜', mastery: 68 },
-    { name: '地理', icon: '🌏', mastery: 60 }
-  ]
-
-  if (knowledgeData.value.length > 0) {
-    mockSubjects.forEach(s => {
-      const found = knowledgeData.value.find(k => k.subject === s.name)
-      if (found && found.knowledgePoints.length > 0) {
-        const avg = Math.round(found.knowledgePoints.reduce((sum, p) => sum + p.masteryLevel, 0) / found.knowledgePoints.length)
-        s.mastery = avg
-      }
-    })
-  }
-  subjects.value = mockSubjects
+  subjects.value = knowledgeData.value.map((item) => ({
+    name: item.subject,
+    icon: subjectIcon(item.subject),
+    mastery: item.knowledgePoints.length > 0
+      ? Math.round(item.knowledgePoints.reduce((sum, p) => sum + p.masteryLevel, 0) / item.knowledgePoints.length)
+      : 0
+  }))
 
   loading.value = false
 })
 
 const startTraining = (subject: string) => {
-  ElMessage.info(`正在为你生${subject}专项训练题...`)
+  ElMessage.info(`正在为你生成${subject}专项训练题...`)
 }
 
 const doReinforcement = (err: ErrorItem) => {
   ElMessage.success(`已推送${err.subject}同类补强题`)
 }
 
-function getMockErrors(): ErrorItem[] {
-  return [
-    { id: 1, subject: '数学', knowledgePoint: '函数与导数', questionContent: '已知函数 f(x)=x²+2x-3，求 f(-1) 的值', wrongAnswer: '-4', aiAnalysis: '代入公式错误，忘记将x=-1代入后计算平方项，建议加强基础运算练习。', reinforcementFlag: 0, createdAt: '2026-06-25' },
-    { id: 2, subject: '英语', knowledgePoint: '阅读理解', questionContent: 'What is the main idea of paragraph 2?', wrongAnswer: 'A', aiAnalysis: '未能准确理解段落主旨，建议进行精读训练，关注段落首尾句。', reinforcementFlag: 0, createdAt: '2026-06-24' }
-  ]
+function subjectIcon(subject: string) {
+  const icons: Record<string, string> = {
+    '语文': '📖',
+    '数学': '📐',
+    '英语': '🌍',
+    '历史': '🏛️',
+    '政治': '📜',
+    '地理': '🌏'
+  }
+  return icons[subject] || '📌'
 }
 
-function getMockKnowledge(): KnowledgeSubject[] {
-  const templates: Record<string, string[]> = {
-    '语文': ['文言文阅读', '现代文阅读', '诗歌鉴赏', '作文'],
-    '数学': ['函数与导数', '三角函数', '数列', '概率统计', '解析几何'],
-    '英语': ['阅读理解', '完形填空', '语法', '写作', '词汇'],
-    '历史': ['中国古代史', '中国近现代史', '世界史'],
-    '政治': ['经济生活', '政治生活', '文化生活', '哲学'],
-    '地理': ['自然地理', '人文地理', '区域地理']
+function requireStudentId() {
+  const studentId = getStudentId()
+  if (!studentId) {
+    ElMessage.error('未获取到绑定学生信息，请重新登录')
+    loading.value = false
+    return null
   }
-  return Object.entries(templates).map(([subject, points]) => ({
-    subject,
-    knowledgePoints: points.map(name => {
-      const level = 30 + Math.round(Math.random() * 60)
-      return { name, masteryLevel: level, status: level >= 70 ? 'strong' : level >= 40 ? 'normal' : 'weak' }
-    })
-  }))
+  return studentId
 }
 </script>
 

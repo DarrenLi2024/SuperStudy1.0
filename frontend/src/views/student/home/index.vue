@@ -102,7 +102,7 @@ import CollegeCard from '@/components/CollegeCard.vue'
 import GrowthProgress from '@/components/GrowthProgress.vue'
 import AiLoading from '@/components/AiLoading.vue'
 import { getCollegeCards, getGrowthProgress } from '@/api/growth'
-import { getTodayTasks } from '@/api/learning'
+import { completeTask, getTodayTasks } from '@/api/learning'
 import { getMyProfile } from '@/api/student'
 import type { CollegeCardData, GrowthProgressData, TodayTaskData, TaskItem } from '@/types/growth'
 import { ElMessage } from 'element-plus'
@@ -141,9 +141,9 @@ const fetchData = async () => {
         const profileRes = await getMyProfile()
         studentId = profileRes.data.id
         remainingDays.value = profileRes.data.remainingDays || 365
-      } catch {
-        studentId = 1
-        remainingDays.value = 345
+      } catch (error: any) {
+        ElMessage.error(error?.message || '学生档案加载失败')
+        return
       }
     }
 
@@ -159,27 +159,22 @@ const fetchData = async () => {
     if (cardsRes.status === 'fulfilled') {
       collegeCardData.value = cardsRes.value.data
     } else {
-      console.warn('获取院校卡片数据失败，使用Mock数据:', cardsRes.reason)
-      collegeCardData.value = getMockCardData()
+      ElMessage.error('院校卡片数据加载失败')
     }
 
     if (progressRes.status === 'fulfilled') {
       progressData.value = progressRes.value.data
     } else {
-      progressData.value = getMockProgressData()
+      ElMessage.error('段位进度加载失败')
     }
 
     if (tasksRes.status === 'fulfilled') {
       taskData.value = tasksRes.value.data
     } else {
-      taskData.value = getMockTaskData()
+      ElMessage.error('今日任务加载失败')
     }
-  } catch (err) {
-    console.error('数据加载失败，使用Mock数据:', err)
-    collegeCardData.value = getMockCardData()
-    progressData.value = getMockProgressData()
-    taskData.value = getMockTaskData()
-    remainingDays.value = 345
+  } catch (err: any) {
+    ElMessage.error(err?.message || '数据加载失败')
   } finally {
     loading.value = false
   }
@@ -187,63 +182,17 @@ const fetchData = async () => {
 
 const handleTaskComplete = async (task: TaskItem) => {
   try {
+    const rate = task.status === 'completed' ? 100 : 0
+    await completeTask(task.id, rate)
+    task.completionRate = rate
     ElMessage.success(`已完成：${task.content}`)
-  } catch {
-    // ignore
+  } catch (error: any) {
+    task.status = task.status === 'completed' ? 'pending' : 'completed'
+    ElMessage.error(error?.message || '任务状态更新失败')
   }
 }
 
 onMounted(fetchData)
-
-// Mock数据（后端不可用时的降级方案）
-function getMockCardData(): CollegeCardData {
-  return {
-    currentBatchCards: [
-      { id: 1, name: '河南大学', logo: '/logos/default.svg', batch: '公办二本' },
-      { id: 2, name: '河北师范大学', logo: '/logos/default.svg', batch: '公办二本' },
-      { id: 3, name: '山西大学', logo: '/logos/default.svg', batch: '公办二本' }
-    ],
-    targetBatchCards: [
-      { id: 4, name: '郑州大学', logo: '/logos/default.svg', batch: '211' },
-      { id: 5, name: '陕西师范大学', logo: '/logos/default.svg', batch: '211' },
-      { id: 6, name: '西南大学', logo: '/logos/default.svg', batch: '211' }
-    ],
-    dreamCollege: {
-      name: '北京大学',
-      logo: '/logos/dream.svg',
-      batch: '双一流',
-      scoreGap: 150,
-      subjectGaps: [{ subject: '数学', gap: 60 }, { subject: '英语', gap: 30 }],
-      aiIncentive: '你的数学进步空间很大，加油！'
-    },
-    currentBatch: '公办二本',
-    currentScore: 450
-  }
-}
-
-function getMockProgressData(): GrowthProgressData {
-  return {
-    phases: [
-      { name: '二本阶段', startScore: 400, endScore: 480, currentScore: 450, progress: 62.5, completed: false },
-      { name: '一本阶段', startScore: 480, endScore: 550, currentScore: 450, progress: 0, completed: false },
-      { name: '211/双一流阶段', startScore: 550, endScore: 650, currentScore: 450, progress: 0, completed: false }
-    ],
-    totalProgress: 20,
-    targetScore: 600
-  }
-}
-
-function getMockTaskData(): TodayTaskData {
-  return {
-    tasks: [
-      { id: 1, type: '专项刷题', content: '完成10道函数综合练习题', subject: '数学', knowledgePoint: '函数与导数', aiHint: '本次任务为补齐函数与导数知识点短板', completionRate: 0, status: 'pending' },
-      { id: 2, type: '专项刷题', content: '精读2篇阅读理解并整理生词', subject: '英语', knowledgePoint: '阅读理解', aiHint: '本次任务为提升阅读理解能力', completionRate: 0, status: 'pending' },
-      { id: 3, type: '知识点巩固', content: '复习大气环流章节', subject: '地理', knowledgePoint: '自然地理', aiHint: '本次任务为巩固自然地理基础知识', completionRate: 0, status: 'pending' }
-    ],
-    aiComment: '今日学习任务已为你量身定制，从薄弱环节开始突破，点滴积累终见成效！',
-    completionRate: 0
-  }
-}
 </script>
 
 <style scoped lang="scss">

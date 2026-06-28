@@ -71,6 +71,7 @@ import { getUserInfo, clearAuth, getStudentId } from '@/utils/auth'
 import { getChildOverview } from '@/api/parent'
 import AiLoading from '@/components/AiLoading.vue'
 import * as echarts from 'echarts'
+import { ElMessage } from 'element-plus'
 
 const router = useRouter()
 const loading = ref(true)
@@ -88,10 +89,12 @@ const overview = ref({
 
 onMounted(async () => {
   try {
-    const res = await getChildOverview(getStudentId() || 1)
+    const studentId = requireStudentId()
+    if (!studentId) return
+    const res = await getChildOverview(studentId)
     overview.value = res.data
-  } catch {
-    overview.value = getMockOverview()
+  } catch (error: any) {
+    ElMessage.error(error?.message || '孩子学习数据加载失败')
   }
 
   await nextTick()
@@ -125,21 +128,16 @@ const handleLogout = () => {
   router.push('/login')
 }
 
-function getMockOverview() {
-  return {
-    currentBatch: '公办二本',
-    dreamCollege: '北京大学',
-    scoreGap: 150,
-    weeklyAiComment: '本周孩子整体学习状态良好，数学和英语有显著进步，但历史科目仍需加强。建议重点关注函数与导数模块的专项训练。',
-    weeklyCompletionRate: 78,
-    recentExamTrend: [
-      { date: '06-01', score: 420, rank: 85000 },
-      { date: '06-08', score: 435, rank: 82000 },
-      { date: '06-15', score: 450, rank: 78000 },
-      { date: '06-22', score: 445, rank: 79500 }
-    ]
+function requireStudentId() {
+  const studentId = getStudentId()
+  if (!studentId) {
+    ElMessage.error('未获取到绑定学生信息，请重新登录')
+    loading.value = false
+    return null
   }
+  return studentId
 }
+
 </script>
 
 <style scoped lang="scss">

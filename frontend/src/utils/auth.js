@@ -19,6 +19,11 @@ export function getUserInfo() {
 }
 
 export function setUserInfo(info) {
+  if (info && info.studentId) {
+    localStorage.setItem('superstudy_student_id', String(info.studentId))
+  } else {
+    localStorage.removeItem('superstudy_student_id')
+  }
   return localStorage.setItem(USER_INFO_KEY, JSON.stringify(info))
 }
 
@@ -48,4 +53,5 @@ export function getStudentId() {
 export function clearAuth() {
   removeToken()
   removeUserInfo()
+  localStorage.removeItem('superstudy_student_id')
 }
