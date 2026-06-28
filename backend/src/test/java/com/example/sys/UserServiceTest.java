@@ -78,7 +78,7 @@ class UserServiceTest {
         void login_Success() {
             SysUser user = createMockUser(1L, "student001", "student", 1);
             when(sysUserMapper.selectOne(any())).thenReturn(user);
-            when(jwtUtil.generateToken(anyLong(), anyString(), anyString())).thenReturn("mock-token");
+            when(jwtUtil.generateToken(anyLong(), anyString(), anyString(), anyLong())).thenReturn("mock-token");
 
             com.example.sys.dto.LoginRequest request = new com.example.sys.dto.LoginRequest();
             request.setUsername("student001");
