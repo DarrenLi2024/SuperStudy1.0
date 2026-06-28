@@ -3,6 +3,7 @@ package com.example.sys;
 import cn.hutool.core.util.RandomUtil;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
+import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
 import com.example.config.BusinessException;
 import com.example.dto.ApiPageResult;
 import com.example.sys.dto.*;
@@ -27,7 +28,7 @@ import java.util.Map;
 import java.util.stream.Collectors;
 
 @Service
-public class UserServiceImpl implements UserService {
+public class UserServiceImpl extends ServiceImpl<SysUserMapper, SysUser> implements UserService {
 
     private static final List<String> ALLOWED_ROLES = Arrays.asList("student", "parent", "admin");
     private static final DateTimeFormatter EXPIRE_FORMATTER =
