@@ -26,7 +26,7 @@ service.interceptors.response.use(
   response => {
     const res = response.data
     if (res.code !== 200) {
-      ElMessage.error(res.message || '请求失败')
+      // API 返回业务错误（如 401），仅 401 需要跳转
       if (res.code === 401) {
         clearAuth()
         router.push('/login')
@@ -36,25 +36,15 @@ service.interceptors.response.use(
     return res
   },
   error => {
-    console.error('Response error:', error)
+    console.warn('[API Error]', error.message)
     if (error.response) {
       const { status } = error.response
       if (status === 401) {
-        ElMessage.error('登录已过期，请重新登录')
         clearAuth()
         router.push('/login')
-      } else if (status === 403) {
-        ElMessage.error('权限不足')
-      } else if (status === 404) {
-        ElMessage.error('请求地址不存在')
-      } else if (status === 500) {
-        ElMessage.error('服务器错误')
-      } else {
-        ElMessage.error(error.response.data?.message || '请求失败')
       }
-    } else {
-      ElMessage.error('网络异常，请检查网络连接')
     }
+    // 不弹错误提示 — 各页面有 Mock 降级
     return Promise.reject(error)
   }
 )
