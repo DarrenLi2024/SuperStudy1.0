@@ -4,6 +4,7 @@ import com.baomidou.mybatisplus.extension.service.IService;
 import com.example.dto.request.ExamSubmitRequest;
 import com.example.dto.response.CollegeCardResponse;
 import com.example.dto.response.ExamRecordResponse;
+import com.example.dto.response.GrowthDataResponse;
 import com.example.dto.response.GrowthProgressResponse;
 import com.example.exam.entity.ExamRecord;
 
