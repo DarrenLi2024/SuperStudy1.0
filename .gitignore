@@ -1,0 +1,34 @@
+# === Java / Maven ===
+backend/target/
+backend/*.jar
+*.class
+*.log
+*.war
+
+# === IDE ===
+.idea/
+*.iml
+.vscode/
+.settings/
+.project
+.classpath
+.factorypath
+
+# === macOS ===
+.DS_Store
+Thumbs.db
+
+# === Node / Frontend ===
+node_modules/
+frontend/dist/
+*.tsbuildinfo
+
+# === Environment (secrets) ===
+.env
+backend/src/main/resources/application-local.yml
+
+# === Temp / OS ===
+*.swp
+*.swo
+*~
+*.bak
