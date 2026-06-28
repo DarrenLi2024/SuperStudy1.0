@@ -73,7 +73,7 @@ public class ExamServiceImpl extends ServiceImpl<ExamRecordMapper, ExamRecord> i
         }
 
         // AI诊断报告（简化版，后续接入真实LLM）
-        String diagnosis = generateDiagnosis(request.getSubjectScores(), currentBatch);
+        String diagnosis = generateDiagnosis(request.getSubjectScores(), batchDisplayName(currentBatch));
         record.setAiDiagnosisReport(diagnosis);
 
         this.save(record);
@@ -100,12 +100,27 @@ public class ExamServiceImpl extends ServiceImpl<ExamRecordMapper, ExamRecord> i
 
     @Override
     public String calculateBatch(Integer score) {
-        if (score == null) return "未知";
-        if (score >= 600) return "985/双一流";
+        if (score == null) return "unknown";
+        if (score >= 600) return "985";
         if (score >= 550) return "211";
-        if (score >= 480) return "普通一本";
-        if (score >= 400) return "公办二本";
-        return "本科以下";
+        if (score >= 480) return "first_class";
+        if (score >= 400) return "second_class";
+        return "below_本科";
+    }
+
+    /**
+     * 将批次编码转换为中文显示名（供前端使用）
+     */
+    public static String batchDisplayName(String code) {
+        if (code == null) return "未知";
+        switch (code) {
+            case "985": return "985/双一流";
+            case "211": return "211";
+            case "first_class": return "普通一本";
+            case "second_class": return "公办二本";
+            case "below_本科": return "本科以下";
+            default: return code;
+        }
     }
 
     @Override
@@ -133,7 +148,7 @@ public class ExamServiceImpl extends ServiceImpl<ExamRecordMapper, ExamRecord> i
                 .currentBatchCards(currentColleges)
                 .targetBatchCards(targetColleges)
                 .dreamCollege(dreamInfo)
-                .currentBatch(currentBatch)
+                .currentBatch(batchDisplayName(currentBatch))
                 .currentScore(currentScore)
                 .build();
     }
@@ -165,8 +180,8 @@ public class ExamServiceImpl extends ServiceImpl<ExamRecordMapper, ExamRecord> i
         phases.add(buildPhase("二本阶段", 400, 480, currentScore));
         // 阶段2: 一本阶段 (480-550)
         phases.add(buildPhase("一本阶段", 480, 550, currentScore));
-        // 阶段3: 211/双一流阶段 (550-650)
-        phases.add(buildPhase("211/双一流阶段", 550, 650, currentScore));
+        // 阶段3: 985/211阶段 (550-650)
+        phases.add(buildPhase("985/211阶段", 550, 650, currentScore));
 
         // 计算总进度
         double totalProgress = calculateTotalProgress(currentScore, 400, 650);
@@ -268,7 +283,7 @@ public class ExamServiceImpl extends ServiceImpl<ExamRecordMapper, ExamRecord> i
                 .id(c.getId())
                 .name(c.getCollegeName())
                 .logo(c.getLogoPath() != null ? c.getLogoPath() : "/logos/default.svg")
-                .batch(c.getAdmissionBatch())
+                .batch(batchDisplayName(c.getAdmissionBatch()))
                 .build()).collect(Collectors.toList());
     }
 
@@ -289,7 +304,7 @@ public class ExamServiceImpl extends ServiceImpl<ExamRecordMapper, ExamRecord> i
         return CollegeCardResponse.DreamCollegeInfo.builder()
                 .name(profile.getDreamCollege() != null ? profile.getDreamCollege() : "目标院校")
                 .logo("/logos/dream.png")
-                .batch(profile.getDreamCollegeBatch() != null ? profile.getDreamCollegeBatch() : targetScore >= 550 ? "211/双一流" : "普通一本")
+                .batch(profile.getDreamCollegeBatch() != null ? batchDisplayName(profile.getDreamCollegeBatch()) : (targetScore >= 550 ? "985/双一流" : "普通一本"))
                 .scoreGap(scoreGap)
                 .subjectGaps(subjectGaps)
                 .aiIncentive(incentive)
