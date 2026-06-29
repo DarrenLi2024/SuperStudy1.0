@@ -30,8 +30,9 @@ public class SecurityConfig {
 
     /**
      * 允许的 CORS 来源（可通过环境变量 CORS_ALLOWED_ORIGINS 覆盖，逗号分隔）
+     * 默认值：本地开发地址 + CloudStudio 通配模式 + Vercel 通配模式
      */
-    @Value("${app.cors.allowed-origins:http://localhost:5173,http://localhost:3000}")
+    @Value("${app.cors.allowed-origins:http://localhost:5173,http://localhost:3000,https://*.cloudstudio.run,https://*.vercel.app}")
     private String allowedOrigins;
 
     @Bean
@@ -71,7 +72,7 @@ public class SecurityConfig {
                 .toList();
 
         CorsConfiguration configuration = new CorsConfiguration();
-        // 使用 setAllowedOriginPatterns 而非 setAllowedOrigins，避免 allowCredentials=true 时的冲突
+        // 使用 setAllowedOriginPatterns 支持通配符模式（如 https://*.cloudstudio.run）
         configuration.setAllowedOriginPatterns(origins);
         configuration.setAllowedMethods(Arrays.asList("GET", "POST", "PUT", "DELETE", "OPTIONS"));
         configuration.setAllowedHeaders(Arrays.asList("Authorization", "Content-Type", "X-Requested-With"));

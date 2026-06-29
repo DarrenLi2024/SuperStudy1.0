@@ -3,8 +3,13 @@ import { ElMessage } from 'element-plus'
 import { getToken, clearAuth } from './auth'
 import router from '@/router'
 
+// 生产环境使用 Railway 后端地址，开发环境使用 vite proxy
+const API_BASE_URL = import.meta.env.PROD
+  ? 'https://backend-production-a907.up.railway.app'
+  : ''
+
 const service = axios.create({
-  baseURL: '',
+  baseURL: API_BASE_URL,
   timeout: 15000
 })
 
