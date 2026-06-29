@@ -47,7 +47,8 @@ logging:
   logback:
     rollingpolicy:
       max-file-size: 100MB
-      max-history: 7
+      max-history: 30
+      total-size-cap: 3GB
 
 # 生产环境关闭 MyBatis-Plus SQL 日志输出
 mybatis-plus:

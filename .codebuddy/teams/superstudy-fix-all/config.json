@@ -1,0 +1,18 @@
+{
+  "name": "superstudy-fix-all",
+  "leadAgentId": "d12f691060074488bbebb2eae3f693a5",
+  "workspacePath": "/Users/lirundong/Documents/SuperStudy1.0",
+  "createdAt": "2026-06-29T16:44:46.267Z",
+  "options": {
+    "workspacePath": "/Users/lirundong/Documents/SuperStudy1.0",
+    "isAutoTeam": false
+  },
+  "members": [
+    {
+      "memberId": "team-lead@superstudy-fix-all",
+      "name": "team-lead",
+      "role": "Team Lead - coordinates the team and interacts with the user"
+    }
+  ],
+  "isAutoTeam": false
+}

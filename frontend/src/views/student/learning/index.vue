@@ -88,9 +88,12 @@ import Header from '@/components/Header.vue'
 import AiLoading from '@/components/AiLoading.vue'
 import KnowledgeHeatmap from '@/components/KnowledgeHeatmap.vue'
 import { getErrorQuestions, getKnowledgeStatus } from '@/api/learning'
-import { getTrainingQuestions } from '@/api/question'
+import { getTrainingQuestions, getReinforcementQuestions } from '@/api/question'
 import { getStudentId } from '@/utils/auth'
 import { useAI } from '@/composables/useAI'
+import { useRouter } from 'vue-router'
+
+const router = useRouter()
 
 const {
   streaming: aiStreaming,
@@ -168,8 +171,22 @@ const startTraining = async (subject: string) => {
   }
 }
 
-const doReinforcement = (err: ErrorItem) => {
-  ElMessage.success(`已推送${err.subject}同类补强题，请前往模考中心查看`)
+const doReinforcement = async (err: ErrorItem) => {
+  try {
+    const studentId = getStudentId()
+    if (!studentId) return
+    const res = await getReinforcementQuestions(studentId, err.knowledgePoint, 5)
+    const questions = (res as any).data || []
+    if (questions.length > 0) {
+      ElMessage.success(`已生成${questions.length}道${err.subject}补强题`)
+      // 跳转到模考中心
+      router.push('/student/exam')
+    } else {
+      ElMessage.warning('暂无补强题目，请稍后重试')
+    }
+  } catch (e: any) {
+    ElMessage.error('补强题目生成失败：' + (e.message || '请稍后重试'))
+  }
 }
 
 function subjectIcon(subject: string) {

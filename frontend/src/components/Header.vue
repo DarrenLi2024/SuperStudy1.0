@@ -2,17 +2,17 @@
   <div class="page-header">
     <div class="header-left">
       <span class="logo-text">🎓 AI升学陪伴</span>
+      <span v-if="roleBadge" class="role-badge">{{ roleBadge }}</span>
     </div>
     <div class="header-center">
       <el-menu mode="horizontal" :ellipsis="false" :default-active="activeMenu" @select="handleMenuSelect">
-        <el-menu-item index="/student">首页</el-menu-item>
-        <el-menu-item index="/student/learning">学习中心</el-menu-item>
-        <el-menu-item index="/student/exam">模考中心</el-menu-item>
-        <el-menu-item index="/student/growth">成长数据</el-menu-item>
+        <el-menu-item v-for="item in menuItems" :key="item.path" :index="item.path">
+          {{ item.label }}
+        </el-menu-item>
       </el-menu>
     </div>
     <div class="header-right">
-      <span class="user-name">{{ nickname || '学生用户' }}</span>
+      <span class="user-name">{{ nickname || defaultNickname }}</span>
       <el-button type="primary" link @click="handleLogout">退出</el-button>
     </div>
   </div>
@@ -21,14 +21,47 @@
 <script setup lang="ts">
 import { computed } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
-import { getUserInfo, clearAuth } from '@/utils/auth'
+import { getUserInfo, clearAuth, getRole } from '@/utils/auth'
 
 const router = useRouter()
 const route = useRoute()
-const emit = defineEmits<{ (e: 'logout'): void }>()
 
 const userInfo = computed(() => getUserInfo())
 const nickname = computed(() => userInfo.value?.nickname || '')
+const role = computed(() => getRole())
+
+const defaultNickname = computed(() => {
+  switch (role.value) {
+    case 'admin': return '管理员'
+    case 'parent': return '家长'
+    default: return '学生用户'
+  }
+})
+
+const roleBadge = computed(() => {
+  switch (role.value) {
+    case 'parent': return '家长端'
+    case 'admin': return '管理端'
+    default: return ''
+  }
+})
+
+const menuItems = computed(() => {
+  switch (role.value) {
+    case 'admin':
+      return [{ path: '/admin', label: '用户管理' }]
+    case 'parent':
+      return [{ path: '/parent', label: '首页' }]
+    default:
+      return [
+        { path: '/student', label: '首页' },
+        { path: '/student/learning', label: '学习中心' },
+        { path: '/student/exam', label: '模考中心' },
+        { path: '/student/growth', label: '成长数据' }
+      ]
+  }
+})
+
 const activeMenu = computed(() => route.path)
 
 const handleMenuSelect = (path: string) => {
@@ -54,11 +87,25 @@ const handleLogout = () => {
   z-index: 100;
 }
 
+.header-left {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
 .logo-text {
   font-size: 18px;
   font-weight: 700;
   color: #409eff;
   white-space: nowrap;
+}
+
+.role-badge {
+  font-size: 12px;
+  color: #e6a23c;
+  background: #fdf6ec;
+  padding: 2px 8px;
+  border-radius: 4px;
 }
 
 .header-center {

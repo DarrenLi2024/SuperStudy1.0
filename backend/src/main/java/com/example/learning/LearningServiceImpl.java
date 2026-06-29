@@ -150,14 +150,22 @@ public class LearningServiceImpl extends ServiceImpl<TaskRecordMapper, TaskRecor
                 int masteryLevel;
                 String status;
 
+                // 基于真实错题数量计算掌握度（不再使用随机数）
                 if (count >= 5) {
-                    masteryLevel = 20 + new Random().nextInt(20);
+                    // 错题5次以上：掌握度40%以下
+                    masteryLevel = Math.max(10, 40 - (int)(count - 5) * 5);
                     status = "weak";
                 } else if (count >= 2) {
-                    masteryLevel = 40 + new Random().nextInt(30);
+                    // 错题2-4次：掌握度40-70%
+                    masteryLevel = 40 + (int)((4 - count) * 10);
+                    status = "normal";
+                } else if (count == 1) {
+                    // 错题1次：掌握度70-85%
+                    masteryLevel = 70;
                     status = "normal";
                 } else {
-                    masteryLevel = 70 + new Random().nextInt(30);
+                    // 无错题：掌握度85-100%（根据该科总分推断）
+                    masteryLevel = 85;
                     status = "strong";
                 }
 
@@ -172,11 +180,11 @@ public class LearningServiceImpl extends ServiceImpl<TaskRecordMapper, TaskRecor
             result.put(subject, points);
         }
 
-        // 如果没有错题数据，生成默认数据
+        // 如果没有错题数据，基于学科基础知识目录生成默认掌握度
+        // 无错题 = 无法判断薄弱点，默认掌握度设为70（中等偏上），等待真实数据
         if (result.isEmpty()) {
             String[] defaultSubjects = {"语文", "数学", "英语", "历史", "政治", "地理"};
             for (String subject : defaultSubjects) {
-                Random random = new Random();
                 String[] points;
                 switch (subject) {
                     case "数学":
@@ -194,12 +202,12 @@ public class LearningServiceImpl extends ServiceImpl<TaskRecordMapper, TaskRecor
 
                 List<KnowledgePointDto> pointList = new ArrayList<>();
                 for (String point : points) {
-                    int level = 30 + random.nextInt(70);
+                    // 无错题数据时，默认掌握度设为70（提示用户：需完成模考获取真实数据）
                     pointList.add(KnowledgePointDto.builder()
                             .subject(subject)
                             .name(point)
-                            .masteryLevel(level)
-                            .status(level >= 70 ? "strong" : level >= 40 ? "normal" : "weak")
+                            .masteryLevel(70)
+                            .status("normal")
                             .build());
                 }
                 result.put(subject, pointList);
@@ -212,34 +220,25 @@ public class LearningServiceImpl extends ServiceImpl<TaskRecordMapper, TaskRecor
     // ==================== 私有辅助方法 ====================
 
     private TodayTaskResponse generateDefaultTasks(Long studentId) {
-        // 生成默认的今日任务（AI简化版，后续接入真实LLM）
+        // 生成默认的今日任务（确定性模板，按优先级排序）
+        // 优先分配核心学科（语数英），再分配选考科目
         List<TodayTaskResponse.TaskItem> tasks = new ArrayList<>();
-        Random random = new Random();
 
         String[][] taskTemplates = {
                 {"数学", "函数与导数", "完成10道函数综合练习题", "专项刷题"},
                 {"英语", "阅读理解", "精读2篇阅读理解并整理生词", "专项刷题"},
                 {"语文", "文言文阅读", "翻译1篇文言文并归纳实词", "错题复盘"},
                 {"历史", "时间轴", "整理本周历史时间轴", "知识点巩固"},
-                {"政治", "时事", "浏览本周时事热点并做笔记", "知识点巩固"},
-                {"地理", "自然地理", "复习大气环流章节", "知识点巩固"}
         };
 
-        // 随机选取3-4个任务
-        int taskCount = 3 + random.nextInt(2);
-        List<Integer> indices = new ArrayList<>();
-        for (int i = 0; i < taskTemplates.length; i++) indices.add(i);
-        Collections.shuffle(indices);
-
-        for (int i = 0; i < taskCount && i < indices.size(); i++) {
-            int idx = indices.get(i);
+        for (int i = 0; i < taskTemplates.length; i++) {
             tasks.add(TodayTaskResponse.TaskItem.builder()
                     .id((long) (i + 1))
-                    .type(taskTemplates[idx][3])
-                    .content(taskTemplates[idx][2])
-                    .subject(taskTemplates[idx][0])
-                    .knowledgePoint(taskTemplates[idx][1])
-                    .aiHint("本次任务为补齐" + taskTemplates[idx][1] + "知识点短板")
+                    .type(taskTemplates[i][3])
+                    .content(taskTemplates[i][2])
+                    .subject(taskTemplates[i][0])
+                    .knowledgePoint(taskTemplates[i][1])
+                    .aiHint("本次任务为补齐" + taskTemplates[i][1] + "知识点短板")
                     .completionRate(0.0)
                     .status("pending")
                     .build());

@@ -357,12 +357,8 @@ public class ExamServiceImpl extends ServiceImpl<ExamRecordMapper, ExamRecord> i
         Integer targetScore = profile.getTargetScore() != null ? profile.getTargetScore() : 600;
         int scoreGap = Math.max(0, targetScore - currentScore);
 
-        // 按当前目标分差给出优先补强方向，用于目标院校卡片展示。
-        List<CollegeCardResponse.SubjectGap> subjectGaps = Arrays.asList(
-                CollegeCardResponse.SubjectGap.builder().subject("数学").gap((int) (scoreGap * 0.4)).build(),
-                CollegeCardResponse.SubjectGap.builder().subject("英语").gap((int) (scoreGap * 0.3)).build(),
-                CollegeCardResponse.SubjectGap.builder().subject("综合").gap((int) (scoreGap * 0.3)).build()
-        );
+        // 基于真实各科成绩计算分差分配（而非固定40%/30%/30%）
+        List<CollegeCardResponse.SubjectGap> subjectGaps = calculateRealSubjectGaps(profile.getId(), currentScore, targetScore);
 
         String incentive = generateIncentive(currentScore, targetScore, scoreGap);
 
@@ -374,6 +370,76 @@ public class ExamServiceImpl extends ServiceImpl<ExamRecordMapper, ExamRecord> i
                 .subjectGaps(subjectGaps)
                 .aiIncentive(incentive)
                 .build();
+    }
+
+    /**
+     * 基于最近一次考试的各科实际成绩，计算各科提分空间
+     */
+    private List<CollegeCardResponse.SubjectGap> calculateRealSubjectGaps(Long studentId, int currentScore, int targetScore) {
+        List<CollegeCardResponse.SubjectGap> gaps = new ArrayList<>();
+        int scoreGap = Math.max(0, targetScore - currentScore);
+
+        // 获取最近一次考试的各科分数
+        ExamRecord latestExam = getLatestExamRecord(studentId);
+        Map<String, Integer> latestScores = new LinkedHashMap<>();
+
+        if (latestExam != null && latestExam.getSubjectScores() != null) {
+            try {
+                String scoresJson = latestExam.getSubjectScores();
+                String[] parts = scoresJson.replace("{", "").replace("}", "").split(",");
+                for (String part : parts) {
+                    String[] kv = part.split(":");
+                    if (kv.length == 2) {
+                        latestScores.put(kv[0].replace("\"", "").trim(), Integer.parseInt(kv[1].trim()));
+                    }
+                }
+            } catch (Exception ignored) {}
+        }
+
+        // 科目满分映射
+        Map<String, Integer> maxScores = new LinkedHashMap<>();
+        maxScores.put("语文", 150); maxScores.put("数学", 150); maxScores.put("英语", 150);
+        maxScores.put("历史", 100); maxScores.put("政治", 100); maxScores.put("地理", 100);
+        maxScores.put("物理", 100); maxScores.put("化学", 100); maxScores.put("生物", 100);
+
+        // 计算各科提分空间 = 满分 - 当前分数
+        Map<String, Integer> roomForImprovement = new LinkedHashMap<>();
+        for (String subject : new String[]{"语文", "数学", "英语", "历史", "政治", "地理"}) {
+            int current = latestScores.getOrDefault(subject, defaultSubjectScore(subject));
+            int max = maxScores.getOrDefault(subject, 100);
+            roomForImprovement.put(subject, Math.max(0, max - current));
+        }
+
+        // 按提分空间占比分配总差距
+        int totalRoom = roomForImprovement.values().stream().mapToInt(Integer::intValue).sum();
+        if (totalRoom <= 0) totalRoom = 1;
+
+        for (String subject : new String[]{"语文", "数学", "英语", "历史", "政治", "地理"}) {
+            int room = roomForImprovement.get(subject);
+            int gap = (int) Math.round((double) room / totalRoom * scoreGap);
+            if (gap > 0 || room > 0) {
+                gaps.add(CollegeCardResponse.SubjectGap.builder()
+                        .subject(subject)
+                        .gap(Math.max(1, gap))
+                        .build());
+            }
+        }
+
+        // 按分差从大到小排序，取前5个
+        gaps.sort((a, b) -> Integer.compare(b.getGap(), a.getGap()));
+        if (gaps.size() > 5) {
+            gaps = gaps.subList(0, 5);
+        }
+
+        return gaps;
+    }
+
+    private int defaultSubjectScore(String subject) {
+        switch (subject) {
+            case "语文": case "数学": case "英语": return 80;
+            case "历史": case "政治": case "地理": return 60;
+            default: return 60;
+        }
     }
 
     private GrowthProgressResponse.Phase buildPhase(String name, int startScore, int endScore, int currentScore) {

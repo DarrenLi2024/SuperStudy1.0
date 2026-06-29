@@ -3,9 +3,9 @@ import { ElMessage } from 'element-plus'
 import { getToken, clearAuth } from './auth'
 import router from '@/router'
 
-// 生产环境使用 Railway 后端地址，开发环境使用 vite proxy
+// 生产环境使用环境变量 VITE_API_BASE_URL，开发环境使用 vite proxy
 const API_BASE_URL = import.meta.env.PROD
-  ? 'https://backend-production-a907.up.railway.app'
+  ? (import.meta.env.VITE_API_BASE_URL || 'https://backend-production-a907.up.railway.app')
   : ''
 
 const service = axios.create({

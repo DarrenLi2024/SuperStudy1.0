@@ -86,6 +86,40 @@
           <el-button v-else type="primary" @click="showDialog = false">完成</el-button>
         </template>
       </el-dialog>
+
+      <!-- 考试详情弹窗 -->
+      <el-dialog v-model="detailDialogVisible" title="考试详情诊断" width="520px" class="detail-dialog">
+        <div v-if="detailData" class="detail-body">
+          <div class="detail-row">
+            <span class="detail-label">考试日期</span>
+            <span class="detail-value">{{ formatDate(detailData.examDate) }}</span>
+          </div>
+          <div class="detail-row">
+            <span class="detail-label">考试类型</span>
+            <span class="detail-value">{{ detailData.examType === 'weekly' ? '周测' : '月考' }}</span>
+          </div>
+          <div class="detail-row">
+            <span class="detail-label">总分</span>
+            <span class="detail-value highlight">{{ detailData.totalScore }}分</span>
+          </div>
+          <div class="detail-row">
+            <span class="detail-label">等效高考分</span>
+            <span class="detail-value highlight">{{ detailData.equivalentGaokaoScore }}分</span>
+          </div>
+          <div class="detail-row">
+            <span class="detail-label">等效位次</span>
+            <span class="detail-value">{{ detailData.equivalentRank || '暂无数据' }}</span>
+          </div>
+          <div class="detail-row">
+            <span class="detail-label">当前段位</span>
+            <span class="detail-value batch-tag">{{ detailData.currentBatch || '未评估' }}</span>
+          </div>
+          <div v-if="detailData.aiDiagnosisReport" class="detail-diagnosis">
+            <div class="diagnosis-title">🤖 AI诊断报告</div>
+            <div class="diagnosis-content">{{ detailData.aiDiagnosisReport }}</div>
+          </div>
+        </div>
+      </el-dialog>
     </div>
   </div>
 </template>
@@ -96,7 +130,7 @@ import { ElMessage } from 'element-plus'
 import { ArrowRight } from '@element-plus/icons-vue'
 import Header from '@/components/Header.vue'
 import AiLoading from '@/components/AiLoading.vue'
-import { getExamRecords, submitExam as submitExamApi } from '@/api/exam'
+import { getExamRecords, getExamDetail, submitExam as submitExamApi } from '@/api/exam'
 import { getTrainingQuestions } from '@/api/question'
 import type { ExamRecordItem } from '@/types/growth'
 import { getStudentId } from '@/utils/auth'
@@ -108,6 +142,8 @@ const currentQuestions = ref<any[]>([])
 const selectedAnswers = ref<Record<number, string>>({})
 const showAnswers = ref(false)
 const currentExamType = ref('weekly')
+const detailDialogVisible = ref(false)
+const detailData = ref<ExamRecordItem | null>(null)
 
 onMounted(async () => {
   try {
@@ -119,6 +155,9 @@ onMounted(async () => {
     ElMessage.error(error?.message || '考试记录加载失败')
   }
 })
+
+// 全科覆盖的学科列表
+const ALL_SUBJECTS = ['语文', '数学', '英语', '历史', '政治', '地理']
 
 const startExam = async (type: string) => {
   currentExamType.value = type
@@ -133,8 +172,30 @@ const startExam = async (type: string) => {
       showDialog.value = false
       return
     }
-    const res = await getTrainingQuestions(studentId, '数学', type === 'weekly' ? 6 : 10)
-    currentQuestions.value = (res.data || []).map((q: any, index: number) => ({ ...q, id: q.id || index + 1 }))
+
+    // 全科覆盖：为每门学科获取题目
+    const questionCount = type === 'weekly' ? 6 : 10
+    const perSubject = Math.max(1, Math.floor(questionCount / ALL_SUBJECTS.length))
+    const allQuestions: any[] = []
+
+    for (const subject of ALL_SUBJECTS) {
+      try {
+        const res = await getTrainingQuestions(studentId, subject, perSubject)
+        const qs = (res.data || []).map((q: any, index: number) => ({
+          ...q,
+          id: q.id || (allQuestions.length + index + 1)
+        }))
+        allQuestions.push(...qs)
+      } catch {
+        // 某科获取失败不影响其他科
+      }
+    }
+
+    currentQuestions.value = allQuestions
+    if (allQuestions.length === 0) {
+      showDialog.value = false
+      ElMessage.error('AI试卷生成失败，请稍后重试')
+    }
   } catch (error: any) {
     showDialog.value = false
     ElMessage.error(error?.message || 'AI试卷生成失败')
@@ -163,8 +224,16 @@ const submitExam = async () => {
   }
 }
 
-const viewDetail = (record: ExamRecordItem) => {
-  ElMessage.info(`查看${formatDate(record.examDate)}考试详情`)
+const viewDetail = async (record: ExamRecordItem) => {
+  try {
+    const res = await getExamDetail(record.id)
+    detailData.value = res.data || record
+    detailDialogVisible.value = true
+  } catch {
+    // API不可用时用列表数据兜底
+    detailData.value = record
+    detailDialogVisible.value = true
+  }
 }
 
 const formatDate = (date: string) => {
@@ -329,5 +398,29 @@ function requireStudentId() {
 .exam-empty {
   padding: 40px 0;
   text-align: center;
+}
+
+// 详情弹窗
+.detail-body {
+  .detail-row {
+    display: flex;
+    justify-content: space-between;
+    padding: 10px 0;
+    border-bottom: 1px solid #f5f5f5;
+    &:last-of-type { border-bottom: none; }
+  }
+  .detail-label { font-size: 13px; color: #909399; }
+  .detail-value { font-size: 14px; color: #303133; font-weight: 500;
+    &.highlight { color: #409eff; font-size: 16px; font-weight: 700; }
+    &.batch-tag { color: #67c23a; background: #f0f9eb; padding: 2px 10px; border-radius: 4px; font-size: 12px; }
+  }
+  .detail-diagnosis {
+    margin-top: 16px;
+    padding: 16px;
+    background: #f0f4ff;
+    border-radius: 8px;
+    .diagnosis-title { font-size: 14px; font-weight: 600; color: #409eff; margin-bottom: 8px; }
+    .diagnosis-content { font-size: 13px; color: #606266; line-height: 1.7; white-space: pre-wrap; }
+  }
 }
 </style>

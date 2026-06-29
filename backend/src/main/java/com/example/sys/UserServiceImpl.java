@@ -60,6 +60,9 @@ public class UserServiceImpl extends ServiceImpl<SysUserMapper, SysUser> impleme
             throw new BusinessException(403, "账号已被禁用，请联系管理员");
         }
 
+        // 单端登录：清除旧Token，使旧端立即失效
+        tokenRedisService.removeToken(user.getId());
+
         String token = jwtUtil.generateToken(user.getId(), user.getUsername(), user.getRole(), user.getStudentId());
         tokenRedisService.storeToken(user.getId(), token);
 

@@ -1,15 +1,6 @@
 <template>
   <div class="parent-page">
-    <div class="parent-header">
-      <div class="header-left">
-        <span class="logo">🎓 AI升学陪伴</span>
-        <span class="role-badge">家长端</span>
-      </div>
-      <div class="header-right">
-        <span class="user-name">{{ userInfo?.nickname || '家长' }}</span>
-        <el-button type="primary" link @click="handleLogout">退出</el-button>
-      </div>
-    </div>
+    <Header />
 
     <div class="main-content">
       <AiLoading v-if="loading" text="正在加载孩子学习数据..." />
@@ -65,18 +56,16 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted, nextTick } from 'vue'
-import { useRouter } from 'vue-router'
-import { getUserInfo, clearAuth, getStudentId } from '@/utils/auth'
+import { ref, onMounted, nextTick } from 'vue'
+import { getStudentId } from '@/utils/auth'
 import { getChildOverview } from '@/api/parent'
+import Header from '@/components/Header.vue'
 import AiLoading from '@/components/AiLoading.vue'
 import * as echarts from 'echarts'
 import { ElMessage } from 'element-plus'
 
-const router = useRouter()
 const loading = ref(true)
 const trendChartRef = ref<HTMLElement>()
-const userInfo = computed(() => getUserInfo())
 
 const overview = ref({
   currentBatch: '',
@@ -123,11 +112,6 @@ function renderChart() {
   window.addEventListener('resize', () => chart.resize())
 }
 
-const handleLogout = () => {
-  clearAuth()
-  router.push('/login')
-}
-
 function requireStudentId() {
   const studentId = getStudentId()
   if (!studentId) {
@@ -144,22 +128,6 @@ function requireStudentId() {
 .parent-page {
   min-height: 100vh;
   background: #f5f7fa;
-}
-
-.parent-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  background: #fff;
-  padding: 0 24px;
-  height: 60px;
-  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.08);
-
-  .logo { font-size: 18px; font-weight: 700; color: #409eff; }
-  .header-left { display: flex; align-items: center; gap: 8px; }
-  .role-badge { font-size: 12px; color: #e6a23c; background: #fdf6ec; padding: 2px 8px; border-radius: 4px; }
-  .header-right { display: flex; align-items: center; gap: 12px; }
-  .user-name { font-size: 14px; color: #606266; }
 }
 
 .main-content {
