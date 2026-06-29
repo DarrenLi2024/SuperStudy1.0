@@ -31,13 +31,59 @@ public class QuestionBankServiceImpl implements QuestionBankService {
         StudentProfile profile = studentProfileMapper.selectById(studentId);
         int currentScore = profile != null && profile.getBaselineScore() != null ? profile.getBaselineScore() : 450;
         List<String> difficulties = difficultyPlan(currentScore, count);
+        // 按难度分组统计需要多少道，避免同知识点重复
+        Map<String, Long> difficultyCounts = difficulties.stream()
+                .collect(Collectors.groupingBy(d -> d, Collectors.counting()));
         List<Map<String, Object>> result = new ArrayList<>();
+        Set<Long> seenIds = new HashSet<>();
 
-        for (String difficulty : difficulties) {
-            String knowledgePoint = weakestKnowledgePoint(studentId, subject);
-            result.addAll(generateQuestionsByDifficulty(subject, difficulty, knowledgePoint, 1));
+        for (Map.Entry<String, Long> entry : difficultyCounts.entrySet()) {
+            // 不限定知识点，从该科目该难度的全量优质题中取
+            List<Map<String, Object>> questions = generateQuestionsByDifficultyNoDup(
+                    subject, entry.getKey(), entry.getValue().intValue(), seenIds);
+            result.addAll(questions);
         }
         return result.stream().limit(count).collect(Collectors.toList());
+    }
+
+    /**
+     * 生成指定数量不重复的题目（跨知识点，避免重复）
+     */
+    private List<Map<String, Object>> generateQuestionsByDifficultyNoDup(
+            String subject, String difficulty, int count, Set<Long> seenIds) {
+        List<Map<String, Object>> result = new ArrayList<>();
+
+        // 1. 从题库取已有题（去掉已返回的）
+        List<AiQuestionBank> existing = questionBankMapper.selectList(new LambdaQueryWrapper<AiQuestionBank>()
+                .eq(AiQuestionBank::getSubject, subject)
+                .eq(AiQuestionBank::getDifficulty, difficulty)
+                .ge(AiQuestionBank::getQualityScore, BigDecimal.valueOf(0.7))
+                .last("LIMIT " + Math.max(1, count * 3)));  // 多取一些用于去重
+        Collections.shuffle(existing);
+
+        for (AiQuestionBank q : existing) {
+            if (result.size() >= count) break;
+            if (seenIds.contains(q.getId())) continue;
+            seenIds.add(q.getId());
+            result.add(toQuestionMap(q));
+        }
+
+        // 2. 不足的用生成补齐
+        int missing = count - result.size();
+        if (missing <= 0) return result;
+
+        List<Map<String, Object>> generated = questionGenerator.generateBatch(subject, difficulty, missing);
+        for (Map<String, Object> question : generated) {
+            if (result.size() >= count) break;
+            if (questionGenerator.validateQuestion(question)) {
+                AiQuestionBank saved = toEntity(question);
+                questionBankMapper.insert(saved);
+                seenIds.add(saved.getId());
+                question.put("id", saved.getId());
+                result.add(question);
+            }
+        }
+        return result;
     }
 
     @Override
