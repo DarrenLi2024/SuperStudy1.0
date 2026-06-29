@@ -1,7 +1,7 @@
 package com.example.ai;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
-import com.example.ai.crawler.GaokaoDataCrawler;
+import com.example.ai.crawler.GaokaoDataProvider;
 import com.example.entity.ScoreRank;
 import com.example.mapper.ScoreRankMapper;
 import lombok.RequiredArgsConstructor;
@@ -17,7 +17,7 @@ import java.util.stream.Collectors;
 public class GaokaoDataServiceImpl implements GaokaoDataService {
 
     private final ScoreRankMapper scoreRankMapper;
-    private final GaokaoDataCrawler crawler;
+    private final GaokaoDataProvider gaokaoDataProvider;
 
     @Override
     public boolean syncScoreRankData() {
@@ -39,7 +39,7 @@ public class GaokaoDataServiceImpl implements GaokaoDataService {
         for (String province : provinces) {
             for (String subjectType : Arrays.asList("physics", "history")) {
                 try {
-                    List<ScoreRank> ranks = crawler.crawlScoreRank(province, currentYear, subjectType);
+                    List<ScoreRank> ranks = gaokaoDataProvider.getScoreRank(province, currentYear, subjectType);
                     int inserted = saveRanks(ranks);
                     totalInserted += inserted;
                     log.info("一分一段同步完成: {} {}年 {} 插入{}条", province, currentYear,
@@ -134,7 +134,7 @@ public class GaokaoDataServiceImpl implements GaokaoDataService {
 
     @Override
     public List<String> getSupportedProvinces() {
-        return crawler.getSupportedProvinces();
+        return gaokaoDataProvider.getSupportedProvinces();
     }
 
     // ==================== 内部方法 ====================

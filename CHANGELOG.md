@@ -27,6 +27,33 @@
 
 ---
 
+## [1.1.0] - 2026-06-30
+
+### AI Native 全线打通 — 核心修复
+
+**新增**
+- **AiController** — 统一 AI 接入端点 (`/api/v1/ai/generate` 同步 + `/api/v1/ai/stream` SSE流式)
+- **AiController.status** — AI 服务健康检查端点 (`GET /api/v1/ai/status`)
+- **前端 api/ai.js** — AI 服务 API 层 (`aiGenerate`, `getAiStatus`)
+- **CollegeDataProvider / GaokaoDataProvider** — 重命名消除"爬虫"命名欺诈，明确标注 LLM 驱动
+- LearningServiceImpl AI 点评 — 今日任务生成时通过 LLM 生成真实 AI 点评
+
+**修复**
+- **降级题目答案不再固定为 A** — `QuestionGeneratorImpl.fallbackQuestion` 和 `DefaultLlmClient.generateFallbackQuestions` 基于 seed 确定性变化
+- **ExamServiceImpl 诊断报告接入真实 LLM** — `generateDiagnosis` 从模板字符串改为 LLM 优先 + 规则降级
+- **GrowthServiceImpl 注入 AI 服务** — 段位升级和成长数据通过 IncentiveService/LearningAnalysisService 生成 AI 内容
+- **useAI.js fallback 路径修复** — SSE 失败时正确降级到 `/api/v1/ai/generate`
+- **application-prod.yml AI 配置完善** — 明确标注配置说明，未设置时安全降级
+- **application-dev.yml** — 增加三种启用 AI 的详细说明（环境变量/命令行/Ollama）
+
+**移除**
+- CollegeCrawler / CollegeCrawlerImpl — 被 CollegeDataProvider/Impl 替代
+- GaokaoDataCrawler / GaokaoDataCrawlerImpl — 被 GaokaoDataProvider/Impl 替代
+
+**变更**
+- LearningAnalysisServiceImpl.latestSubjectScores — `.last("LIMIT 1")` 改为 MyBatis-Plus Page 对象（消除 SQL 注入风险）
+
+---
 ## [1.0.0] - 2026-06-28
 
 ### 新增

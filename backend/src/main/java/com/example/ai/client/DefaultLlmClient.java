@@ -581,16 +581,36 @@ public class DefaultLlmClient implements LlmClient {
         String subject = vars.containsKey("subject") ? vars.get("subject").toString() : "数学";
         String difficulty = vars.containsKey("difficulty") ? vars.get("difficulty").toString() : "basic";
         String knowledgePoint = vars.containsKey("knowledgePoint") ? vars.get("knowledgePoint").toString() : subjectKnowledgePoint(subject);
+        int count = 1;
+        if (vars.containsKey("count") && vars.get("count") instanceof Number) {
+            count = Math.min(((Number) vars.get("count")).intValue(), 5);
+        }
+        int seed = Math.abs((subject + knowledgePoint).hashCode());
         List<Map<String, Object>> questions = new ArrayList<>();
-        Map<String, Object> q = new LinkedHashMap<>();
-        q.put("subject", subject);
-        q.put("knowledgePoint", knowledgePoint);
-        q.put("difficulty", difficulty);
-        q.put("questionContent", "【" + subject + "】请完成" + knowledgePoint + "相关练习题，巩固基础概念和解题方法。");
-        q.put("options", Arrays.asList("A. 选项A", "B. 选项B", "C. 选项C", "D. 选项D"));
-        q.put("answer", "A");
-        q.put("analysis", "本题考察" + knowledgePoint + "的基础概念，请认真理解相关定义。");
-        questions.add(q);
+        for (int i = 0; i < count; i++) {
+            Map<String, Object> q = new LinkedHashMap<>();
+            q.put("subject", subject);
+            q.put("knowledgePoint", knowledgePoint);
+            q.put("difficulty", difficulty);
+            q.put("questionContent", "【" + subject + "】请完成" + knowledgePoint + "相关练习题（第" + (i + 1) + "题），巩固基础概念和解题方法。");
+            // 基于 seed+i 确定性生成选项和答案
+            int idx = (seed + i * 7) % 4;
+            String[] letters = {"A", "B", "C", "D"};
+            String[] optionTexts = {
+                subject + "的核心概念定义",
+                "常见的混淆概念",
+                "该知识点的应用场景",
+                "与" + knowledgePoint + "无关的干扰项"
+            };
+            List<String> options = new ArrayList<>();
+            for (int j = 0; j < 4; j++) {
+                options.add(letters[j] + ". " + optionTexts[(idx + j) % 4]);
+            }
+            q.put("options", options);
+            q.put("answer", letters[idx]);
+            q.put("analysis", "本题考察" + knowledgePoint + "的基础概念，正确答案为" + letters[idx] + "。请认真理解相关定义，区分易混淆的概念。");
+            questions.add(q);
+        }
         try {
             return objectMapper.writeValueAsString(questions);
         } catch (Exception e) {

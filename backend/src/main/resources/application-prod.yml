@@ -26,12 +26,22 @@ jwt:
   header: Authorization
   prefix: Bearer
 
+# ========================
+# AI 大模型配置 — 生产环境
+# ========================
+# 生产环境务必设置以下环境变量以启用真实 AI：
+#   AI_LLM_PROVIDER=deepseek
+#   AI_LLM_BASE_URL=https://api.deepseek.com/v1/chat/completions
+#   AI_LLM_API_KEY=sk-你的密钥
+#   AI_LLM_MODEL=deepseek-chat
+#
+# 未设置时自动降级为确定性规则模式（功能正常但输出质量受限）。
 ai:
   llm:
-    provider: ${AI_LLM_PROVIDER}
-    base-url: ${AI_LLM_BASE_URL}
-    api-key: ${AI_LLM_API_KEY}
-    model: ${AI_LLM_MODEL}
+    provider: ${AI_LLM_PROVIDER:}
+    base-url: ${AI_LLM_BASE_URL:}
+    api-key: ${AI_LLM_API_KEY:}
+    model: ${AI_LLM_MODEL:}
     timeout-ms: ${AI_LLM_TIMEOUT_MS:8000}
     max-retries: ${AI_LLM_MAX_RETRIES:2}
     cache-enabled: true

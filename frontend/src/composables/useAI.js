@@ -92,13 +92,17 @@ export function useAI() {
    */
   async function fallbackStream(url, params, startTime) {
     try {
+      // SSE流失败时，降级调用同步 /generate 端点
+      const fallbackUrl = url.replace('/stream', '/generate')
       const res = await request({
-        url: url.replace('/stream', '').replace('/ai/v1/', '/api/v1/'),
+        url: fallbackUrl,
         method: 'post',
         data: params
       })
 
-      const content = res.data?.content || res.data?.data?.content || JSON.stringify(res.data)
+      // 提取 content：兼容 ResponseResult 包装格式
+      const data = res.data?.data || res.data
+      const content = data?.content || (typeof data === 'string' ? data : JSON.stringify(data))
       simulateStream(content, {
         onToken(token) {
           streamText.value += token

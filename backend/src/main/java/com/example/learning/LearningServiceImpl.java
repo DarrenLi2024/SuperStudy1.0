@@ -11,6 +11,7 @@ import com.example.learning.mapper.ErrorQuestionMapper;
 import com.example.learning.mapper.TaskRecordMapper;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 
@@ -19,6 +20,7 @@ import java.text.SimpleDateFormat;
 import java.util.*;
 import java.util.stream.Collectors;
 
+@Slf4j
 @Service
 public class LearningServiceImpl extends ServiceImpl<TaskRecordMapper, TaskRecord> implements LearningService {
 
@@ -260,23 +262,43 @@ public class LearningServiceImpl extends ServiceImpl<TaskRecordMapper, TaskRecor
             List<TodayTaskResponse.TaskItem> tasks = rawTasks.stream().map(this::toTaskItem).collect(Collectors.toList());
             String taskContent = objectMapper.writeValueAsString(tasks);
 
+            // 通过 LLM 生成今日 AI 点评
+            String aiComment = generateAiComment(studentId);
+
             TaskRecord taskRecord = new TaskRecord();
             taskRecord.setStudentId(studentId);
             taskRecord.setTaskDate(new Date());
             taskRecord.setTaskContent(taskContent);
             taskRecord.setCompletionRate(BigDecimal.ZERO);
-            taskRecord.setAiComment("今日任务已按你的薄弱学科和错题记录自动生成。");
+            taskRecord.setAiComment(aiComment);
             taskRecord.setStatus("pending");
             this.save(taskRecord);
 
             return TodayTaskResponse.builder()
                     .tasks(tasks)
-                    .aiComment(taskRecord.getAiComment())
+                    .aiComment(aiComment)
                     .completionRate(0.0)
                     .build();
         } catch (Exception e) {
+            log.debug("AI任务生成失败: {}", e.getMessage());
             return generateDefaultTasks(studentId);
         }
+    }
+
+    /**
+     * 通过 LLM 生成今日 AI 点评
+     */
+    private String generateAiComment(Long studentId) {
+        try {
+            // 尝试使用学情分析服务生成周报级别的点评作为今日点评
+            String weeklyReport = learningAnalysisService.generateWeeklyReport(studentId);
+            if (weeklyReport != null && weeklyReport.length() > 10) {
+                return weeklyReport;
+            }
+        } catch (Exception e) {
+            log.debug("LLM点评生成失败: {}", e.getMessage());
+        }
+        return "今日任务已按你的薄弱学科和错题记录自动生成。专注当下，稳步提升！";
     }
 
     private TodayTaskResponse.TaskItem toTaskItem(Map<String, Object> map) {

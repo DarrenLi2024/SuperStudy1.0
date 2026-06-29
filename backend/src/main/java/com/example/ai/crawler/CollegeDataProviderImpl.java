@@ -14,13 +14,13 @@ import java.util.*;
 import java.util.stream.Collectors;
 
 /**
- * 院校数据爬虫实现
- * 通过LLM智能获取中国高校录取信息
+ * 院校数据提供者实现
+ * 通过 LLM 智能获取中国高校录取信息，未配置远程 AI 时使用种子数据。
  */
 @Slf4j
 @Service
 @RequiredArgsConstructor
-public class CollegeCrawlerImpl implements CollegeCrawler {
+public class CollegeDataProviderImpl implements CollegeDataProvider {
 
     private final LlmClient llmClient;
     private final ObjectMapper objectMapper;
@@ -44,16 +44,16 @@ public class CollegeCrawlerImpl implements CollegeCrawler {
     }
 
     @Override
-    public List<CollegeBasic> crawlCollegesByBatch(String batch) {
+    public List<CollegeBasic> getCollegesByBatch(String batch) {
         String batchLabel = BATCH_LABELS.getOrDefault(batch, batch);
-        log.info("开始抓取院校数据: {} ({})", batch, batchLabel);
+        log.info("获取院校数据: {} ({})", batch, batchLabel);
 
         int[] rankRange = BATCH_RANK_RANGE.getOrDefault(batch, new int[]{50000, 150000});
 
         LlmRequest request = LlmRequest.builder()
-                .taskType("college_crawl")
+                .taskType("college_lookup")
                 .systemPrompt(buildSystemPrompt())
-                .userPrompt(buildCrawlPrompt(batch, batchLabel, rankRange))
+                .userPrompt(buildPrompt(batch, batchLabel, rankRange))
                 .responseSchema(buildResponseSchema())
                 .temperature(0.1)
                 .maxTokens(4096)
@@ -63,7 +63,7 @@ public class CollegeCrawlerImpl implements CollegeCrawler {
         try {
             LlmResponse response = llmClient.generate(request);
             if (response.isFallback() || response.getContent() == null || "{}".equals(response.getContent())) {
-                log.warn("LLM院校抓取失败，使用种子数据: {}", batch);
+                log.info("LLM院校数据获取降级，使用种子数据: {}", batch);
                 return getSeedColleges(batch);
             }
 
@@ -81,7 +81,7 @@ public class CollegeCrawlerImpl implements CollegeCrawler {
             }
 
             if (items == null || items.isEmpty()) {
-                log.warn("LLM返回空院校数据: {}", batch);
+                log.info("LLM返回空院校数据，使用种子: {}", batch);
                 return getSeedColleges(batch);
             }
 
@@ -90,18 +90,18 @@ public class CollegeCrawlerImpl implements CollegeCrawler {
                     .filter(Objects::nonNull)
                     .collect(Collectors.toList());
 
-            log.info("成功抓取院校数据: {} 共{}所", batch, colleges.size());
+            log.info("成功获取院校数据: {} 共{}所", batch, colleges.size());
             return colleges;
 
         } catch (Exception e) {
-            log.error("院校抓取异常: {} - {}", batch, e.getMessage());
+            log.error("院校数据获取异常: {} - {}", batch, e.getMessage());
             return getSeedColleges(batch);
         }
     }
 
     @Override
-    public String crawlCollegeLogo(String collegeName) {
-        // 院校LOGO暂时使用默认路径，后续可对接图标CDN
+    public String getCollegeLogo(String collegeName) {
+        // 院校 LOGO 暂时使用默认路径，后续可对接图标 CDN
         return "/logos/default.svg";
     }
 
@@ -124,7 +124,7 @@ public class CollegeCrawlerImpl implements CollegeCrawler {
                 """;
     }
 
-    private String buildCrawlPrompt(String batch, String batchLabel, int[] rankRange) {
+    private String buildPrompt(String batch, String batchLabel, int[] rankRange) {
         return String.format("""
                 请列出%s的典型院校信息（至少8所）。
 

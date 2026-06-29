@@ -253,18 +253,35 @@ public class QuestionGeneratorImpl implements QuestionGenerator {
         question.put("difficulty", difficulty);
         question.put("scoreRangeTag", scoreRangeTag(difficulty));
 
+        // 基于 index 和 subject hash 生成确定性但变化的选项和答案
+        int seed = Math.abs((subject + knowledgePoint).hashCode() + index * 31);
+
         if (isChoiceSubject(subject)) {
             question.put("questionContent", buildChoiceQuestion(subject, knowledgePoint, difficulty, index));
-            question.put("options", generateOptions(subject, knowledgePoint, index));
-            question.put("answer", "A");
+            List<String> options = generateOptions(subject, knowledgePoint, index);
+            question.put("options", options);
+            // 答案基于 seed 在 A/B/C/D 中确定性选择，不再是固定 A
+            char answerChar = (char) ('A' + (seed % 4));
+            question.put("answer", String.valueOf(answerChar));
             question.put("analysis", buildAnalysis(subject, knowledgePoint));
         } else {
             question.put("questionContent", buildOpenQuestion(subject, knowledgePoint, difficulty, index));
             question.put("options", Collections.emptyList());
-            question.put("answer", "参考答案：本题围绕" + knowledgePoint + "的核心概念，需要结合教材定义和实例进行分析。");
+            // 简答题生成更有针对性的参考答案
+            question.put("answer", buildOpenAnswer(subject, knowledgePoint, index));
             question.put("analysis", buildAnalysis(subject, knowledgePoint));
         }
         return question;
+    }
+
+    private String buildOpenAnswer(String subject, String knowledgePoint, int index) {
+        String[] templates = {
+            "本题考察%s的核心概念。解题关键在于准确理解%s的定义、性质和适用条件，结合具体语境进行分析。",
+            "%s是%s领域的基础考点。回答时需从概念定义入手，逐步展开到实际应用，注意逻辑严密。",
+            "围绕%s这一知识点，首先明确其基本内涵，然后分析在%s学科中的具体表现，最后给出结论。",
+        };
+        String tpl = templates[index % templates.length];
+        return String.format("参考答案：" + tpl, knowledgePoint, subject);
     }
 
     private String buildChoiceQuestion(String subject, String knowledgePoint, String difficulty, int index) {

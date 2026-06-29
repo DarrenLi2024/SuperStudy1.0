@@ -1,7 +1,7 @@
 package com.example.ai;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
-import com.example.ai.crawler.CollegeCrawler;
+import com.example.ai.crawler.CollegeDataProvider;
 import com.example.entity.CollegeBasic;
 import com.example.mapper.CollegeBasicMapper;
 import lombok.RequiredArgsConstructor;
@@ -17,7 +17,7 @@ import java.util.stream.Collectors;
 public class CollegeServiceImpl implements CollegeService {
 
     private final CollegeBasicMapper collegeBasicMapper;
-    private final CollegeCrawler crawler;
+    private final CollegeDataProvider collegeDataProvider;
 
     /** 所有可用批次 */
     private static final List<String> ALL_BATCHES = Arrays.asList("985", "211", "first_class", "second_class");
@@ -27,7 +27,7 @@ public class CollegeServiceImpl implements CollegeService {
         int totalInserted = 0;
         for (String batch : ALL_BATCHES) {
             try {
-                List<CollegeBasic> colleges = crawler.crawlCollegesByBatch(batch);
+                List<CollegeBasic> colleges = collegeDataProvider.getCollegesByBatch(batch);
                 int inserted = saveColleges(colleges);
                 totalInserted += inserted;
                 log.info("院校数据刷新完成: {} 插入{}所", batch, inserted);
@@ -50,7 +50,7 @@ public class CollegeServiceImpl implements CollegeService {
         // 如果数据库数据不足，触发一次抓取
         if (colleges.size() < limit) {
             try {
-                List<CollegeBasic> fresh = crawler.crawlCollegesByBatch(admissionBatch);
+                List<CollegeBasic> fresh = collegeDataProvider.getCollegesByBatch(admissionBatch);
                 saveColleges(fresh);
                 // 重新查询
                 colleges = collegeBasicMapper.selectList(new LambdaQueryWrapper<CollegeBasic>()

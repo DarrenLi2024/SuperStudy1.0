@@ -82,13 +82,14 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted } from 'vue'
+import { ref, onMounted, onUnmounted } from 'vue'
 import { ElMessage } from 'element-plus'
 import Header from '@/components/Header.vue'
 import AiLoading from '@/components/AiLoading.vue'
 import KnowledgeHeatmap from '@/components/KnowledgeHeatmap.vue'
 import { getErrorQuestions, getKnowledgeStatus } from '@/api/learning'
 import { getTrainingQuestions, getReinforcementQuestions } from '@/api/question'
+import { getAiStatus } from '@/api/ai'
 import { getStudentId } from '@/utils/auth'
 import { getSubjectIcon } from '@/constants/subjects'
 import { useAI } from '@/composables/useAI'
@@ -100,9 +101,13 @@ const {
   streaming: aiStreaming,
   streamText: aiStreamText,
   streamFinished: aiStreamFinished,
+  streamGenerate,
   generate,
   reset: resetAI
 } = useAI()
+
+// AI 服务状态
+const aiAvailable = ref(false)
 
 const loading = ref(true)
 const trainingLoading = ref<string | null>(null)
@@ -119,6 +124,12 @@ onMounted(async () => {
   try {
     const studentId = requireStudentId()
     if (!studentId) return
+
+    // 检查 AI 服务状态
+    try {
+      const statusRes = await getAiStatus()
+      aiAvailable.value = statusRes.data?.available || false
+    } catch (e) { /* 忽略 */ }
 
     const [errRes, knowRes] = await Promise.allSettled([
       getErrorQuestions(studentId),
@@ -154,6 +165,10 @@ onMounted(async () => {
   } finally {
     loading.value = false
   }
+})
+
+onUnmounted(() => {
+  resetAI()
 })
 
 const startTraining = async (subject: string) => {

@@ -14,13 +14,16 @@ import java.util.*;
 import java.util.stream.Collectors;
 
 /**
- * 高考一分一段数据爬虫实现
- * 通过LLM智能抓取各省教育考试院公开数据
+ * 高考一分一段数据提供者实现
+ * 通过 LLM 根据训练知识生成分数-位次对应数据，未配置远程 AI 时使用线性估算。
+ * 
+ * 重要声明：这不是网页爬虫。真实一分一段数据应从各省教育考试院官网获取。
+ * 当前 LLM 生成的数据仅供参考，用于功能演示和降级场景。
  */
 @Slf4j
 @Service
 @RequiredArgsConstructor
-public class GaokaoDataCrawlerImpl implements GaokaoDataCrawler {
+public class GaokaoDataProviderImpl implements GaokaoDataProvider {
 
     private final LlmClient llmClient;
     private final ObjectMapper objectMapper;
@@ -44,16 +47,14 @@ public class GaokaoDataCrawlerImpl implements GaokaoDataCrawler {
     };
 
     @Override
-    public List<ScoreRank> crawlScoreRank(String province, int year, String subjectType) {
+    public List<ScoreRank> getScoreRank(String province, int year, String subjectType) {
         String subTypeLabel = "physics".equals(subjectType) ? "物理类" : "历史类";
+        log.info("获取一分一段数据: {} {}年 {}", province, year, subTypeLabel);
 
-        log.info("开始抓取 {} {}年 {} 一分一段数据", province, year, subTypeLabel);
-
-        // 构建LLM请求：让AI根据已知的高考数据模式生成结构化的一分一段表
         LlmRequest request = LlmRequest.builder()
-                .taskType("score_rank_crawl")
+                .taskType("score_rank_lookup")
                 .systemPrompt(buildSystemPrompt())
-                .userPrompt(buildCrawlPrompt(province, year, subjectType))
+                .userPrompt(buildPrompt(province, year, subjectType))
                 .responseSchema(buildResponseSchema())
                 .temperature(0.1)
                 .maxTokens(4096)
@@ -63,11 +64,10 @@ public class GaokaoDataCrawlerImpl implements GaokaoDataCrawler {
         try {
             LlmResponse response = llmClient.generate(request);
             if (response.isFallback() || response.getContent() == null || "{}".equals(response.getContent())) {
-                log.warn("LLM一分一段抓取失败，使用估算数据: {} {}", province, year);
+                log.info("LLM一分一段数据获取降级，使用线性估算: {} {}", province, year);
                 return estimateScoreRank(province, year, subjectType);
             }
 
-            // 解析LLM返回的JSON
             String content = response.getContent().trim();
             List<Map<String, Object>> items;
 
@@ -82,7 +82,7 @@ public class GaokaoDataCrawlerImpl implements GaokaoDataCrawler {
             }
 
             if (items == null || items.isEmpty()) {
-                log.warn("LLM返回空一分一段数据: {} {}", province, year);
+                log.info("LLM返回空一分一段数据，使用估算: {} {}", province, year);
                 return estimateScoreRank(province, year, subjectType);
             }
 
@@ -91,11 +91,11 @@ public class GaokaoDataCrawlerImpl implements GaokaoDataCrawler {
                     .filter(Objects::nonNull)
                     .collect(Collectors.toList());
 
-            log.info("成功抓取 {} {}年 {} 一分一段数据，共{}条", province, year, subTypeLabel, ranks.size());
+            log.info("成功获取一分一段数据: {} {}年 {} 共{}条", province, year, subTypeLabel, ranks.size());
             return ranks;
 
         } catch (Exception e) {
-            log.error("一分一段抓取异常: {} {} {} - {}", province, year, subjectType, e.getMessage());
+            log.error("一分一段数据获取异常: {} {} {} - {}", province, year, subjectType, e.getMessage());
             return estimateScoreRank(province, year, subjectType);
         }
     }
@@ -120,13 +120,17 @@ public class GaokaoDataCrawlerImpl implements GaokaoDataCrawler {
                    - 985线约前1-2%，211线约前3-8%，一本线约前15-25%
                 3. 输出严格JSON数组格式
 
+                ## 重要声明
+                - 数据为基于公开统计规律的合理估算，并非官方精确数据
+                - 真实一分一段数据请以各省教育考试院官方发布为准
+
                 ## 安全约束
                 - 数据应为合理估算，不得伪造官方数据
                 - 不得包含任何政治敏感内容
                 """;
     }
 
-    private String buildCrawlPrompt(String province, int year, String subjectType) {
+    private String buildPrompt(String province, int year, String subjectType) {
         String subTypeLabel = "physics".equals(subjectType) ? "物理类" : "历史类";
         return String.format("""
                 请生成%s省%d年高考%s一分一段数据（关键分数点）。

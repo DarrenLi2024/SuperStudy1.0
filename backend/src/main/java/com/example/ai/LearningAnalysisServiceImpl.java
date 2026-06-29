@@ -401,10 +401,13 @@ public class LearningAnalysisServiceImpl implements LearningAnalysisService {
     // ==================== 数据辅助方法 ====================
 
     private Map<String, Integer> latestSubjectScores(Long studentId) {
-        ExamRecord record = examRecordMapper.selectOne(new LambdaQueryWrapper<ExamRecord>()
+        // 使用分页对象替代 .last() 拼接，避免SQL注入
+        com.baomidou.mybatisplus.extension.plugins.pagination.Page<ExamRecord> page =
+                new com.baomidou.mybatisplus.extension.plugins.pagination.Page<>(1, 1);
+        ExamRecord record = examRecordMapper.selectPage(page, new LambdaQueryWrapper<ExamRecord>()
                 .eq(ExamRecord::getStudentId, studentId)
-                .orderByDesc(ExamRecord::getExamDate)
-                .last("LIMIT 1"));
+                .orderByDesc(ExamRecord::getExamDate))
+                .getRecords().stream().findFirst().orElse(null);
         if (record == null || record.getSubjectScores() == null) {
             return Collections.emptyMap();
         }

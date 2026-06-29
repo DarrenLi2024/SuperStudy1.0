@@ -94,8 +94,8 @@ public class ExamServiceImpl extends ServiceImpl<ExamRecordMapper, ExamRecord> i
             record.setExamDate(new Date());
         }
 
-        // AI诊断报告（简化版，后续接入真实LLM）
-        String diagnosis = generateDiagnosis(request.getSubjectScores(), batchDisplayName(currentBatch));
+        // AI诊断报告：通过LLM生成真实分析，失败时降级为规则模板
+        String diagnosis = generateDiagnosis(request.getSubjectScores(), batchDisplayName(currentBatch), studentId);
         record.setAiDiagnosisReport(diagnosis);
 
         this.save(record);
@@ -471,12 +471,49 @@ public class ExamServiceImpl extends ServiceImpl<ExamRecordMapper, ExamRecord> i
         return (double) (currentScore - minScore) / (maxScore - minScore) * 100;
     }
 
-    private String generateDiagnosis(Map<String, Integer> subjectScores, String batch) {
-        if (subjectScores == null || subjectScores.isEmpty()) {
-            return "本次考试整体表现正常，继续保持当前学习节奏。";
+    private String generateDiagnosis(Map<String, Integer> subjectScores, String batch, Long studentId) {
+        // 优先尝试 LLM 真实分析
+        if (learningAnalysisService != null) {
+            try {
+                // 构建学情上下文
+                StringBuilder ctx = new StringBuilder();
+                ctx.append("学生当前稳定批次：").append(batch).append("\n");
+                ctx.append("各科成绩：\n");
+                if (subjectScores != null && !subjectScores.isEmpty()) {
+                    for (Map.Entry<String, Integer> entry : subjectScores.entrySet()) {
+                        ctx.append("- ").append(entry.getKey()).append(": ").append(entry.getValue()).append("分\n");
+                    }
+                }
+
+                // 获取历史错题统计
+                List<Map<String, Object>> weakSubjects = learningAnalysisService.analyzeWeakSubjects(studentId);
+                if (weakSubjects != null && !weakSubjects.isEmpty()) {
+                    ctx.append("薄弱学科分析：\n");
+                    for (Map<String, Object> ws : weakSubjects) {
+                        ctx.append("- ").append(ws.get("subject")).append(": ")
+                                .append(ws.get("level")).append("\n");
+                    }
+                }
+
+                String llmDiagnosis = learningAnalysisService.analyzeErrorCause(
+                        "综合诊断",
+                        ctx.toString(),
+                        "请根据以上数据生成一份200字以内的考试诊断报告，包含：整体评价、薄弱点分析、具体建议。"
+                );
+
+                if (llmDiagnosis != null && llmDiagnosis.length() > 10 && !llmDiagnosis.startsWith("错因集中在")) {
+                    return "【AI诊断报告】\n当前稳定批次：" + batch + "\n" + llmDiagnosis.trim();
+                }
+            } catch (Exception e) {
+                log.debug("LLM诊断生成失败，使用规则降级: " + e.getMessage());
+            }
         }
 
-        // 找出最弱和最擅长的科目
+        // 降级：规则模板
+        if (subjectScores == null || subjectScores.isEmpty()) {
+            return "【AI诊断报告】\n当前稳定批次：" + batch + "\n本次考试整体表现正常，继续保持当前学习节奏。";
+        }
+
         Optional<Map.Entry<String, Integer>> minEntry = subjectScores.entrySet().stream()
                 .min(Map.Entry.comparingByValue());
         Optional<Map.Entry<String, Integer>> maxEntry = subjectScores.entrySet().stream()
