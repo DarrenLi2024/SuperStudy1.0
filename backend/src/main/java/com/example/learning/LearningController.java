@@ -37,7 +37,7 @@ public class LearningController {
      * 完成任务
      */
     @PostMapping("/complete")
-    @PreAuthorize("hasRole('student')")
+    @PreAuthorize("hasRole('STUDENT')")
     public ResponseResult<Void> completeTask(@RequestParam Long taskId,
                                              @RequestParam BigDecimal completionRate) {
         learningService.completeTask(taskId, completionRate);
@@ -58,7 +58,7 @@ public class LearningController {
      * 记录错题
      */
     @PostMapping("/errors")
-    @PreAuthorize("hasRole('student')")
+    @PreAuthorize("hasRole('STUDENT')")
     public ResponseResult<Void> recordError(@RequestBody ErrorQuestion question) {
         Long studentId = studentAccessService.requireCurrentStudentId();
         question.setStudentId(studentId);

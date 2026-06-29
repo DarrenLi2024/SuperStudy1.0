@@ -26,7 +26,7 @@ public class ExamController {
      * 提交考试成绩
      */
     @PostMapping("/submit")
-    @PreAuthorize("hasRole('student')")
+    @PreAuthorize("hasRole('STUDENT')")
     public ResponseResult<ExamRecordResponse> submitExam(@Valid @RequestBody ExamSubmitRequest submitRequest) {
         Long studentId = studentAccessService.requireCurrentStudentId();
         ExamRecord record = examService.submitExam(studentId, submitRequest);

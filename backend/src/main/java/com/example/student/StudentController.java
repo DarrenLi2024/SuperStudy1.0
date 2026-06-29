@@ -48,7 +48,7 @@ public class StudentController {
      * 创建学生档案
      */
     @PostMapping("/profile")
-    @PreAuthorize("hasRole('student')")
+    @PreAuthorize("hasRole('STUDENT')")
     public ResponseResult<Map<String, Long>> createProfile(@Valid @RequestBody CreateProfileRequest request) {
         Long userId = SecurityUtils.getCurrentUserId();
         return ResponseResult.success(studentService.createProfile(request, userId));
