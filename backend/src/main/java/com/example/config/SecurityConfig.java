@@ -32,7 +32,7 @@ public class SecurityConfig {
      * 允许的 CORS 来源（可通过环境变量 CORS_ALLOWED_ORIGINS 覆盖，逗号分隔）
      * 默认值：本地开发地址 + CloudStudio 通配模式 + Vercel 通配模式
      */
-    @Value("${app.cors.allowed-origins:http://localhost:5173,http://localhost:3000,https://*.cloudstudio.run,https://*.vercel.app}")
+    @Value("${app.cors.allowed-origins:http://localhost:5173,http://localhost:3000,http://*.cloudstudio.run,https://*.cloudstudio.run,https://*.vercel.app}")
     private String allowedOrigins;
 
     @Bean
