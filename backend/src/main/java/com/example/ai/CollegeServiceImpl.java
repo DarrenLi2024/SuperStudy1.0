@@ -1,37 +1,41 @@
 package com.example.ai;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
+import com.example.ai.crawler.CollegeCrawler;
 import com.example.entity.CollegeBasic;
 import com.example.mapper.CollegeBasicMapper;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 
 import java.util.*;
 import java.util.stream.Collectors;
 
+@Slf4j
 @Service
 @RequiredArgsConstructor
 public class CollegeServiceImpl implements CollegeService {
 
     private final CollegeBasicMapper collegeBasicMapper;
+    private final CollegeCrawler crawler;
+
+    /** 所有可用批次 */
+    private static final List<String> ALL_BATCHES = Arrays.asList("985", "211", "first_class", "second_class");
 
     @Override
     public boolean refreshColleges() {
-        List<CollegeBasic> seeds = Arrays.asList(
-                seed("北京大学", "985"),
-                seed("清华大学", "985"),
-                seed("郑州大学", "211"),
-                seed("河南大学", "first_class"),
-                seed("洛阳师范学院", "second_class")
-        );
-        for (CollegeBasic seed : seeds) {
-            CollegeBasic existing = collegeBasicMapper.selectOne(new LambdaQueryWrapper<CollegeBasic>()
-                    .eq(CollegeBasic::getCollegeName, seed.getCollegeName())
-                    .last("LIMIT 1"));
-            if (existing == null) {
-                collegeBasicMapper.insert(seed);
+        int totalInserted = 0;
+        for (String batch : ALL_BATCHES) {
+            try {
+                List<CollegeBasic> colleges = crawler.crawlCollegesByBatch(batch);
+                int inserted = saveColleges(colleges);
+                totalInserted += inserted;
+                log.info("院校数据刷新完成: {} 插入{}所", batch, inserted);
+            } catch (Exception e) {
+                log.error("院校数据刷新失败: {} - {}", batch, e.getMessage());
             }
         }
+        log.info("院校数据刷新完成，共插入{}所", totalInserted);
         return true;
     }
 
@@ -40,20 +44,41 @@ public class CollegeServiceImpl implements CollegeService {
         List<CollegeBasic> colleges = collegeBasicMapper.selectList(new LambdaQueryWrapper<CollegeBasic>()
                 .eq(CollegeBasic::getAdmissionBatch, admissionBatch)
                 .and(subjectType != null && !subjectType.isEmpty(),
-                        wrapper -> wrapper.eq(CollegeBasic::getSubjectType, subjectType).or().eq(CollegeBasic::getSubjectType, "both")));
+                        wrapper -> wrapper.eq(CollegeBasic::getSubjectType, subjectType)
+                                .or().eq(CollegeBasic::getSubjectType, "both")));
+
+        // 如果数据库数据不足，触发一次抓取
+        if (colleges.size() < limit) {
+            try {
+                List<CollegeBasic> fresh = crawler.crawlCollegesByBatch(admissionBatch);
+                saveColleges(fresh);
+                // 重新查询
+                colleges = collegeBasicMapper.selectList(new LambdaQueryWrapper<CollegeBasic>()
+                        .eq(CollegeBasic::getAdmissionBatch, admissionBatch)
+                        .and(subjectType != null && !subjectType.isEmpty(),
+                                wrapper -> wrapper.eq(CollegeBasic::getSubjectType, subjectType)
+                                        .or().eq(CollegeBasic::getSubjectType, "both")));
+            } catch (Exception e) {
+                log.warn("院校数据不足，自动抓取失败: {} - {}", admissionBatch, e.getMessage());
+            }
+        }
+
         Collections.shuffle(colleges);
         return colleges.stream().limit(limit).collect(Collectors.toList());
     }
 
     @Override
     public List<String> getBatchList() {
-        return Arrays.asList("985", "211", "first_class", "second_class");
+        return ALL_BATCHES;
     }
 
     @Override
     public List<CollegeBasic> searchCollege(String keyword) {
+        if (keyword == null || keyword.trim().isEmpty()) {
+            return Collections.emptyList();
+        }
         return collegeBasicMapper.selectList(new LambdaQueryWrapper<CollegeBasic>()
-                .like(keyword != null && !keyword.isEmpty(), CollegeBasic::getCollegeName, keyword));
+                .like(CollegeBasic::getCollegeName, keyword.trim()));
     }
 
     @Override
@@ -64,34 +89,20 @@ public class CollegeServiceImpl implements CollegeService {
                 .last("LIMIT 1"));
     }
 
-    private CollegeBasic seed(String name, String batch) {
-        CollegeBasic college = new CollegeBasic();
-        college.setCollegeName(name);
-        college.setAdmissionBatch(batch);
-        college.setSubjectType("both");
-        college.setLogoPath("/logos/default.svg");
-        college.setLastCrawled(new Date());
-        college.setProvince("河南");
-        college.setYear(Calendar.getInstance().get(Calendar.YEAR));
-        // 设置稳妥位次范围
-        switch (batch) {
-            case "985":
-                college.setMinRank(500);
-                college.setMaxRank(12000);
-                break;
-            case "211":
-                college.setMinRank(10000);
-                college.setMaxRank(58000);
-                break;
-            case "first_class":
-                college.setMinRank(40000);
-                college.setMaxRank(95000);
-                break;
-            case "second_class":
-                college.setMinRank(100000);
-                college.setMaxRank(200000);
-                break;
+    // ==================== 内部方法 ====================
+
+    private int saveColleges(List<CollegeBasic> colleges) {
+        int inserted = 0;
+        for (CollegeBasic college : colleges) {
+            // 检查是否已存在
+            CollegeBasic existing = collegeBasicMapper.selectOne(new LambdaQueryWrapper<CollegeBasic>()
+                    .eq(CollegeBasic::getCollegeName, college.getCollegeName())
+                    .last("LIMIT 1"));
+            if (existing == null && college.getCollegeName() != null) {
+                college.setLastCrawled(new Date());
+                inserted += collegeBasicMapper.insert(college);
+            }
         }
-        return college;
+        return inserted;
     }
 }

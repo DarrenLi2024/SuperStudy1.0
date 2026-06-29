@@ -1,0 +1,27 @@
+# =============================================
+# SuperStudy Prometheus 监控配置
+# =============================================
+# 使用方式：
+#   docker compose -f docker-compose.yml -f deploy/monitoring.yml up -d
+# =============================================
+
+global:
+  scrape_interval: 30s
+  evaluation_interval: 30s
+
+scrape_configs:
+  # Spring Boot Actuator metrics
+  - job_name: 'superstudy-backend'
+    metrics_path: '/actuator/prometheus'
+    static_configs:
+      - targets: ['backend:8080']
+
+  # Redis metrics (via redis_exporter)
+  - job_name: 'redis'
+    static_configs:
+      - targets: ['redis-exporter:9121']
+
+  # MySQL metrics (via mysqld_exporter)
+  - job_name: 'mysql'
+    static_configs:
+      - targets: ['mysql-exporter:9104']

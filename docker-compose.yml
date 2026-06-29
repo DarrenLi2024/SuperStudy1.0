@@ -17,15 +17,16 @@ services:
   db:
     image: mysql:8.0
     environment:
-      MYSQL_ROOT_PASSWORD: ${SPRING_DATASOURCE_PASSWORD:-root123}
+      MYSQL_ROOT_PASSWORD: ${SPRING_DATASOURCE_PASSWORD:?err}
       MYSQL_DATABASE: superstudy
-    ports:
-      - "3306:3306"
+    # 生产环境不要暴露数据库端口到宿主机，仅内部网络通信
+    # ports:
+    #   - "3306:3306"
     volumes:
       - mysql_data:/var/lib/mysql
       - ./deploy/zeabur-schema.sql:/docker-entrypoint-initdb.d/01-init.sql:ro
     healthcheck:
-      test: ["CMD", "mysqladmin", "ping", "-h", "127.0.0.1", "-u", "root", "-p${SPRING_DATASOURCE_PASSWORD:-root123}"]
+      test: ["CMD", "mysqladmin", "ping", "-h", "127.0.0.1", "-u", "root", "-p${SPRING_DATASOURCE_PASSWORD:?err}"]
       interval: 10s
       timeout: 5s
       retries: 5
@@ -33,10 +34,12 @@ services:
   # ---- Redis ----
   redis:
     image: redis:7-alpine
-    ports:
-      - "6379:6379"
+    command: redis-server --requirepass ${SPRING_REDIS_PASSWORD:?err}
+    # 生产环境不要暴露 Redis 端口到宿主机
+    # ports:
+    #   - "6379:6379"
     healthcheck:
-      test: ["CMD", "redis-cli", "ping"]
+      test: ["CMD", "redis-cli", "-a", "${SPRING_REDIS_PASSWORD:?err}", "ping"]
       interval: 10s
       timeout: 3s
       retries: 3
@@ -52,9 +55,10 @@ services:
       SPRING_PROFILES_ACTIVE: prod
       SPRING_DATASOURCE_URL: jdbc:mysql://db:3306/superstudy?useUnicode=true&characterEncoding=utf8mb4&useSSL=false&serverTimezone=Asia/Shanghai&allowPublicKeyRetrieval=true
       SPRING_DATASOURCE_USERNAME: root
-      SPRING_DATASOURCE_PASSWORD: ${SPRING_DATASOURCE_PASSWORD:-root123}
+      SPRING_DATASOURCE_PASSWORD: ${SPRING_DATASOURCE_PASSWORD:?err}
       SPRING_REDIS_HOST: redis
       SPRING_REDIS_PORT: "6379"
+      SPRING_REDIS_PASSWORD: ${SPRING_REDIS_PASSWORD:?err}
       JWT_SECRET: ${JWT_SECRET}
       AI_LLM_PROVIDER: ${AI_LLM_PROVIDER:-local}
       AI_LLM_BASE_URL: ${AI_LLM_BASE_URL:-}
@@ -72,8 +76,9 @@ services:
   # ---- Nginx 前端 ----
   frontend:
     build:
-      context: ./frontend
-      dockerfile: Dockerfile
+      # 从项目根目录构建，以便能 COPY nginx.conf（位于根目录）
+      context: .
+      dockerfile: frontend/Dockerfile
     ports:
       - "80:80"
     depends_on:

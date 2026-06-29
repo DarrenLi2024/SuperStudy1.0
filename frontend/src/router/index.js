@@ -1,5 +1,11 @@
 import { createRouter, createWebHashHistory } from 'vue-router'
-import { getToken, getRole } from '@/utils/auth'
+import { getToken, getRole, isTokenExpired, clearAuth } from '@/utils/auth'
+
+const ROLE_REDIRECT_MAP = {
+  student: '/student',
+  parent: '/parent',
+  admin: '/admin'
+}
 
 const routes = [
   {
@@ -65,37 +71,32 @@ router.beforeEach((to, from, next) => {
   const token = getToken()
   const role = getRole()
 
+  // Token 过期检测：已登录但 token 过期则清除认证并跳转登录
+  if (token && isTokenExpired()) {
+    clearAuth()
+    if (to.meta.requiresAuth !== false) {
+      next('/login')
+      return
+    }
+  }
+
+  const hasValidAuth = token && !isTokenExpired() && role
+
   if (to.meta.requiresAuth === false) {
-    if (token && role) {
-      if (role === 'student') {
-        next('/student')
-      } else if (role === 'parent') {
-        next('/parent')
-      } else if (role === 'admin') {
-        next('/admin')
-      } else {
-        next()
-      }
+    if (hasValidAuth) {
+      next(ROLE_REDIRECT_MAP[role] || '/login')
     } else {
       next()
     }
   } else {
-    if (!token) {
+    if (!hasValidAuth) {
       next('/login')
     } else {
       if (to.meta.roles && to.meta.roles.length > 0) {
         if (to.meta.roles.includes(role)) {
           next()
         } else {
-          if (role === 'student') {
-            next('/student')
-          } else if (role === 'parent') {
-            next('/parent')
-          } else if (role === 'admin') {
-            next('/admin')
-          } else {
-            next('/login')
-          }
+          next(ROLE_REDIRECT_MAP[role] || '/login')
         }
       } else {
         next()

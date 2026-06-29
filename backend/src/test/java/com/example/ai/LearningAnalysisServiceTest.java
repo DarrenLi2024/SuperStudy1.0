@@ -4,6 +4,7 @@ import com.example.ai.client.LlmClient;
 import com.example.exam.mapper.ExamRecordMapper;
 import com.example.learning.entity.ErrorQuestion;
 import com.example.learning.mapper.ErrorQuestionMapper;
+import com.example.student.mapper.StudentProfileMapper;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.Test;
 
@@ -19,6 +20,7 @@ class LearningAnalysisServiceTest {
     void calculateSubjectWeights_extremeMathWeakness_allocatesFortyPercent() {
         ExamRecordMapper examRecordMapper = mock(ExamRecordMapper.class);
         ErrorQuestionMapper errorQuestionMapper = mock(ErrorQuestionMapper.class);
+        StudentProfileMapper studentProfileMapper = mock(StudentProfileMapper.class);
         LlmClient llmClient = mock(LlmClient.class);
 
         ErrorQuestion error1 = new ErrorQuestion();
@@ -32,7 +34,7 @@ class LearningAnalysisServiceTest {
         when(errorQuestionMapper.selectList(any())).thenReturn(Arrays.asList(error1, error2));
 
         LearningAnalysisServiceImpl service = new LearningAnalysisServiceImpl(
-                examRecordMapper, errorQuestionMapper, llmClient, new ObjectMapper());
+                examRecordMapper, errorQuestionMapper, studentProfileMapper, llmClient, new ObjectMapper());
 
         var weights = service.calculateSubjectWeights(1L);
 

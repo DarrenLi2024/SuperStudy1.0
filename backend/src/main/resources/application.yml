@@ -9,14 +9,14 @@ spring:
 
   datasource:
     driver-class-name: com.mysql.cj.jdbc.Driver
-    url: jdbc:mysql://localhost:3306/superstudy?useUnicode=true&characterEncoding=utf8&useSSL=false&serverTimezone=Asia/Shanghai&allowPublicKeyRetrieval=true
-    username: root
-    password: root
+    url: ${SPRING_DATASOURCE_URL:jdbc:mysql://localhost:3306/superstudy?useUnicode=true&characterEncoding=utf8&useSSL=false&serverTimezone=Asia/Shanghai&allowPublicKeyRetrieval=true}
+    username: ${SPRING_DATASOURCE_USERNAME:root}
+    password: ${SPRING_DATASOURCE_PASSWORD:root}
 
   redis:
-    host: localhost
-    port: 6379
-    password:
+    host: ${SPRING_REDIS_HOST:localhost}
+    port: ${SPRING_REDIS_PORT:6379}
+    password: ${SPRING_REDIS_PASSWORD:}
     database: 0
     timeout: 3000ms
     lettuce:
@@ -35,6 +35,7 @@ mybatis-plus:
   type-aliases-package: com.example.sys.entity,com.example.student.entity
   configuration:
     map-underscore-to-camel-case: true
+    # 开发环境打印 SQL；生产环境通过 spring.profiles.active=prod 自动禁用（见 application-prod.yml）
     log-impl: org.apache.ibatis.logging.stdout.StdOutImpl
   global-config:
     db-config:
@@ -44,7 +45,8 @@ mybatis-plus:
       logic-not-delete-value: 0
 
 jwt:
-  secret: superstudy-secret-key-2024-abcdefghijklmnopqrstuvwxyz
+  # 生产环境必须通过 JWT_SECRET 环境变量覆盖！至少 64 字符（HS512 要求）
+  secret: ${JWT_SECRET:superstudy-secret-key-2024-abcdefghijklmnopqrstuvwxyz}
   expiration: 86400000
   header: Authorization
   prefix: Bearer 
@@ -102,8 +104,25 @@ ai:
     max-retries: ${AI_LLM_MAX_RETRIES:1}
     cache-enabled: true
     cache-ttl-seconds: 1800
+    stream-enabled: ${AI_LLM_STREAM_ENABLED:true}
+
+# ========================
+# Actuator 监控端点
+# ========================
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,prometheus,metrics
+  endpoint:
+    health:
+      show-details: when-authorized
+  metrics:
+    export:
+      prometheus:
+        enabled: true
 
 logging:
   level:
-    com.example: debug
-    org.springframework.security: info
+    com.example: ${LOG_LEVEL:info}
+    org.springframework.security: ${SECURITY_LOG_LEVEL:warn}

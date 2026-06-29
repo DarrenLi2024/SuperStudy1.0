@@ -17,6 +17,8 @@ public class LlmProperties {
     private Integer maxRetries = 1;
     private Boolean cacheEnabled = true;
     private Long cacheTtlSeconds = 1800L;
+    /** 是否启用流式输出（SSE） */
+    private Boolean streamEnabled = true;
 
     public boolean isRemoteEnabled() {
         return baseUrl != null && !baseUrl.trim().isEmpty()

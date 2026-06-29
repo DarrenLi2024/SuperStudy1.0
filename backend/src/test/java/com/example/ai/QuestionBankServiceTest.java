@@ -1,5 +1,6 @@
 package com.example.ai;
 
+import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.example.ai.generator.QuestionGenerator;
 import com.example.learning.mapper.ErrorQuestionMapper;
 import com.example.mapper.AiQuestionBankMapper;
@@ -28,7 +29,8 @@ class QuestionBankServiceTest {
         profile.setBaselineScore(450);
         when(studentProfileMapper.selectById(1L)).thenReturn(profile);
         when(errorQuestionMapper.selectList(any())).thenReturn(Collections.emptyList());
-        when(questionBankMapper.selectList(any())).thenReturn(Collections.emptyList());
+        // 使用 selectPage mock（替代原来的 selectList，因为已改为分页查询）
+        when(questionBankMapper.selectPage(any(Page.class), any())).thenReturn(new Page<>());
         when(questionBankMapper.insert(any())).thenAnswer(invocation -> 1);
         when(questionGenerator.generateBatch(anyString(), anyString(), anyInt())).thenAnswer(invocation -> {
             String subject = invocation.getArgument(0);

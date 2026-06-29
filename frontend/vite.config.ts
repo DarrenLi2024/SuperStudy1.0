@@ -18,9 +18,8 @@ export default defineConfig(({ mode }) => {
       open: false,
       proxy: {
         '/api': {
-          // 本地开发时默认指向 Railway 生产后端
-          // 可通过 VITE_API_URL 环境变量覆盖
-          target: env.VITE_API_URL || 'https://backend-production-a907.up.railway.app',
+          // 本地开发时通过环境变量 VITE_API_URL 指定后端地址
+          target: env.VITE_API_URL || 'http://localhost:8080',
           changeOrigin: true
         }
       }
@@ -29,9 +28,9 @@ export default defineConfig(({ mode }) => {
       rollupOptions: {
         output: {
           manualChunks: {
-            'vendor-vue': ['vue', 'vue-router', 'pinia'],
-            'vendor-ui': ['element-plus', 'vant'],
-            'vendor-echarts': ['echarts', 'vue-echarts']
+            'vendor-vue': ['vue', 'vue-router'],
+            'vendor-ui': ['element-plus'],
+            'vendor-echarts': ['echarts']
           }
         }
       },

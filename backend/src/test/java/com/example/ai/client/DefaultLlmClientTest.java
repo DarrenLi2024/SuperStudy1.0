@@ -7,6 +7,9 @@ import org.springframework.core.env.Environment;
 import org.springframework.data.redis.core.RedisTemplate;
 import org.springframework.data.redis.core.ValueOperations;
 
+import java.util.LinkedHashMap;
+import java.util.Map;
+
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.ArgumentMatchers.*;
 import static org.mockito.Mockito.*;
@@ -42,7 +45,10 @@ class DefaultLlmClientTest {
         Environment environment = mock(Environment.class);
         when(environment.getActiveProfiles()).thenReturn(new String[]{"test"});
         when(redisTemplate.opsForValue()).thenReturn(ops);
-        when(ops.get(anyString())).thenReturn("{\"ok\":true}");
+        // getCached() 期望返回值是 Map 类型
+        Map<String, Object> cachedMap = new LinkedHashMap<>();
+        cachedMap.put("content", "{\"ok\":true}");
+        when(ops.get(anyString())).thenReturn(cachedMap);
         DefaultLlmClient client = new DefaultLlmClient(properties, new ObjectMapper(), redisTemplate, environment);
 
         LlmResponse response = client.generate(LlmRequest.builder()

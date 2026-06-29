@@ -1,6 +1,7 @@
 package com.example.ai;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
+import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.example.ai.generator.QuestionGenerator;
 import com.example.entity.AiQuestionBank;
 import com.example.learning.entity.ErrorQuestion;
@@ -53,12 +54,13 @@ public class QuestionBankServiceImpl implements QuestionBankService {
             String subject, String difficulty, int count, Set<Long> seenIds) {
         List<Map<String, Object>> result = new ArrayList<>();
 
-        // 1. 从题库取已有题（去掉已返回的）
-        List<AiQuestionBank> existing = questionBankMapper.selectList(new LambdaQueryWrapper<AiQuestionBank>()
+        // 1. 从题库取已有题（用分页对象替代 .last() 拼接，避免SQL注入）
+        Page<AiQuestionBank> page = new Page<>(1, Math.max(1, count * 3));
+        List<AiQuestionBank> existing = questionBankMapper.selectPage(page, new LambdaQueryWrapper<AiQuestionBank>()
                 .eq(AiQuestionBank::getSubject, subject)
                 .eq(AiQuestionBank::getDifficulty, difficulty)
                 .ge(AiQuestionBank::getQualityScore, BigDecimal.valueOf(0.7))
-                .last("LIMIT " + Math.max(1, count * 3)));  // 多取一些用于去重
+                .orderByDesc(AiQuestionBank::getQualityScore)).getRecords();
         Collections.shuffle(existing);
 
         for (AiQuestionBank q : existing) {
@@ -102,12 +104,14 @@ public class QuestionBankServiceImpl implements QuestionBankService {
 
     @Override
     public List<Map<String, Object>> generateQuestionsByDifficulty(String subject, String difficulty, String knowledgePoint, int count) {
-        List<AiQuestionBank> existing = questionBankMapper.selectList(new LambdaQueryWrapper<AiQuestionBank>()
+        // 用分页对象替代 .last() 拼接，避免SQL注入
+        Page<AiQuestionBank> page = new Page<>(1, Math.max(1, count));
+        List<AiQuestionBank> existing = questionBankMapper.selectPage(page, new LambdaQueryWrapper<AiQuestionBank>()
                 .eq(AiQuestionBank::getSubject, subject)
                 .eq(AiQuestionBank::getDifficulty, difficulty)
                 .eq(knowledgePoint != null && !knowledgePoint.isEmpty(), AiQuestionBank::getKnowledgePoint, knowledgePoint)
                 .ge(AiQuestionBank::getQualityScore, BigDecimal.valueOf(0.7))
-                .last("LIMIT " + Math.max(1, count)));
+                .orderByDesc(AiQuestionBank::getQualityScore)).getRecords();
 
         List<Map<String, Object>> result = existing.stream().map(this::toQuestionMap).collect(Collectors.toList());
         int missing = count - result.size();
