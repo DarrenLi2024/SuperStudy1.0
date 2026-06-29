@@ -1,6 +1,7 @@
 package com.example.exam;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
+import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
 import com.example.config.BusinessException;
 import com.example.dto.request.ExamSubmitRequest;
@@ -106,7 +107,8 @@ public class ExamServiceImpl extends ServiceImpl<ExamRecordMapper, ExamRecord> i
     public List<ExamRecordResponse> getExamRecords(Long studentId) {
         LambdaQueryWrapper<ExamRecord> queryWrapper = new LambdaQueryWrapper<>();
         queryWrapper.eq(ExamRecord::getStudentId, studentId)
-                .orderByDesc(ExamRecord::getExamDate);
+                .orderByDesc(ExamRecord::getExamDate)
+                .last("LIMIT 50"); // 限制最多50条，避免全量加载
         List<ExamRecord> records = this.list(queryWrapper);
         return records.stream().map(ExamRecordResponse::fromEntity).collect(Collectors.toList());
     }
@@ -189,9 +191,9 @@ public class ExamServiceImpl extends ServiceImpl<ExamRecordMapper, ExamRecord> i
         // 获取最新的考试记录，更新当前分数
         LambdaQueryWrapper<ExamRecord> examQuery = new LambdaQueryWrapper<>();
         examQuery.eq(ExamRecord::getStudentId, studentId)
-                .orderByDesc(ExamRecord::getExamDate)
-                .last("LIMIT 1");
-        ExamRecord latestExam = this.getOne(examQuery);
+                .orderByDesc(ExamRecord::getExamDate);
+        Page<ExamRecord> latestPage = this.page(new Page<>(1, 1), examQuery);
+        ExamRecord latestExam = latestPage.getRecords().isEmpty() ? null : latestPage.getRecords().get(0);
         if (latestExam != null && latestExam.getEquivalentGaokaoScore() != null) {
             currentScore = latestExam.getEquivalentGaokaoScore();
         }
@@ -286,9 +288,9 @@ public class ExamServiceImpl extends ServiceImpl<ExamRecordMapper, ExamRecord> i
         }
         LambdaQueryWrapper<ScoreRank> queryWrapper = new LambdaQueryWrapper<>();
         queryWrapper.eq(ScoreRank::getScore, score)
-                .eq(ScoreRank::getYear, Calendar.getInstance().get(Calendar.YEAR))
-                .last("LIMIT 1");
-        ScoreRank rank = scoreRankMapper.selectOne(queryWrapper);
+                .eq(ScoreRank::getYear, Calendar.getInstance().get(Calendar.YEAR));
+        Page<ScoreRank> rankPage = scoreRankMapper.selectPage(new Page<>(1, 1), queryWrapper);
+        ScoreRank rank = rankPage.getRecords().isEmpty() ? null : rankPage.getRecords().get(0);
         return rank != null ? rank.getRankValue() : estimateRank(score);
     }
 
@@ -313,9 +315,9 @@ public class ExamServiceImpl extends ServiceImpl<ExamRecordMapper, ExamRecord> i
         // 简单估算：若没有精确匹配，找最近的分数
         LambdaQueryWrapper<ScoreRank> queryWrapper = new LambdaQueryWrapper<>();
         queryWrapper.le(ScoreRank::getScore, score + 10)
-                .ge(ScoreRank::getScore, score - 10)
-                .last("LIMIT 1");
-        ScoreRank rank = scoreRankMapper.selectOne(queryWrapper);
+                .ge(ScoreRank::getScore, score - 10);
+        Page<ScoreRank> rankPage = scoreRankMapper.selectPage(new Page<>(1, 1), queryWrapper);
+        ScoreRank rank = rankPage.getRecords().isEmpty() ? null : rankPage.getRecords().get(0);
         return rank != null ? rank.getRankValue() : score * 100; // 粗略估算
     }
 
@@ -337,10 +339,11 @@ public class ExamServiceImpl extends ServiceImpl<ExamRecordMapper, ExamRecord> i
 
     private List<CollegeCardResponse.CollegeInfo> getCollegesByRankOrBatch(Integer rank, String batch) {
         if (rank != null) {
-            List<CollegeBasic> rankMatched = collegeBasicMapper.selectList(new LambdaQueryWrapper<CollegeBasic>()
+            Page<CollegeBasic> rankPage = collegeBasicMapper.selectPage(new Page<>(1, 3),
+                    new LambdaQueryWrapper<CollegeBasic>()
                     .le(CollegeBasic::getMinRank, rank + 5000)
-                    .ge(CollegeBasic::getMaxRank, rank - 5000)
-                    .last("LIMIT 3"));
+                    .ge(CollegeBasic::getMaxRank, rank - 5000));
+            List<CollegeBasic> rankMatched = rankPage.getRecords();
             if (!rankMatched.isEmpty()) {
                 return rankMatched.stream().map(c -> CollegeCardResponse.CollegeInfo.builder()
                         .id(c.getId())
@@ -513,9 +516,9 @@ public class ExamServiceImpl extends ServiceImpl<ExamRecordMapper, ExamRecord> i
     private ExamRecord getLatestExamRecord(Long studentId) {
         LambdaQueryWrapper<ExamRecord> query = new LambdaQueryWrapper<>();
         query.eq(ExamRecord::getStudentId, studentId)
-                .orderByDesc(ExamRecord::getExamDate)
-                .last("LIMIT 1");
-        return this.getOne(query);
+                .orderByDesc(ExamRecord::getExamDate);
+        Page<ExamRecord> page = this.page(new Page<>(1, 1), query);
+        return page.getRecords().isEmpty() ? null : page.getRecords().get(0);
     }
 
     private void recordGrowthUpgradeIfNeeded(Long studentId, ExamRecord previousRecord, ExamRecord currentRecord) {

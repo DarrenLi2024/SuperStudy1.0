@@ -134,6 +134,7 @@ import { getExamRecords, getExamDetail, submitExam as submitExamApi } from '@/ap
 import { getTrainingQuestions } from '@/api/question'
 import type { ExamRecordItem } from '@/types/growth'
 import { getStudentId } from '@/utils/auth'
+import { ALL_SUBJECTS } from '@/constants/subjects'
 
 const examRecords = ref<ExamRecordItem[]>([])
 const showDialog = ref(false)
@@ -154,10 +155,26 @@ onMounted(async () => {
   } catch (error: any) {
     ElMessage.error(error?.message || '考试记录加载失败')
   }
-})
 
-// 全科覆盖的学科列表
-const ALL_SUBJECTS = ['语文', '数学', '英语', '历史', '政治', '地理']
+  // 检测是否有从学习中心传来的待做题目
+  const pendingQuestions = sessionStorage.getItem('superstudy_pending_questions')
+  if (pendingQuestions) {
+    try {
+      const questions = JSON.parse(pendingQuestions)
+      const examType = sessionStorage.getItem('superstudy_exam_type') || 'weekly'
+      sessionStorage.removeItem('superstudy_pending_questions')
+      sessionStorage.removeItem('superstudy_exam_type')
+      currentExamType.value = examType
+      dialogTitle.value = examType === 'weekly' ? '专项训练' : '补强训练'
+      showAnswers.value = false
+      selectedAnswers.value = {}
+      currentQuestions.value = questions
+      showDialog.value = true
+    } catch {
+      // 解析失败，忽略
+    }
+  }
+})
 
 const startExam = async (type: string) => {
   currentExamType.value = type
@@ -206,12 +223,23 @@ const submitExam = async () => {
   const total = currentQuestions.value.length
   const answered = Object.keys(selectedAnswers.value).length
   const subjectScores = calculateSubjectScores()
+
+  // 构建作答记录
+  const answers = currentQuestions.value.map(q => ({
+    questionId: q.id,
+    subject: q.subject || '未知',
+    selectedAnswer: selectedAnswers.value[q.id] || '',
+    correctAnswer: q.answer || '',
+    isCorrect: selectedAnswers.value[q.id] === q.answer
+  }))
+
   try {
     const today = new Date().toISOString().substring(0, 10)
     await submitExamApi({
       examType: currentExamType.value,
       subjectScores,
-      examDate: today
+      examDate: today,
+      answers
     })
     showAnswers.value = true
     ElMessage.success(`提交成功！共${total}题，已作答${answered}题`)
@@ -242,7 +270,7 @@ const formatDate = (date: string) => {
 }
 
 function calculateSubjectScores() {
-  const subjects = ['语文', '数学', '英语', '历史', '政治', '地理']
+  const subjects = ALL_SUBJECTS as readonly string[]
   const scores: Record<string, number> = Object.fromEntries(subjects.map(subject => [subject, 0]))
   const totals: Record<string, number> = Object.fromEntries(subjects.map(subject => [subject, 0]))
   currentQuestions.value.forEach((question) => {

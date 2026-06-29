@@ -89,7 +89,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted, nextTick } from 'vue'
+import { ref, onMounted, onUnmounted, nextTick } from 'vue'
 import Header from '@/components/Header.vue'
 import AiLoading from '@/components/AiLoading.vue'
 import { getGrowthData, getGrowthHistory } from '@/api/growth'
@@ -109,6 +109,10 @@ const monthlyReport = ref('')
 const growthData = ref<GrowthData>({ scoreTrend: [], rankTrend: [], subjectTrends: {}, monthlyReport: '' })
 const showUpgradeModal = ref(false)
 const latestUpgrade = ref<GrowthRecordItem | null>(null)
+
+// 保存 chart 实例用于销毁和 resize 清理
+const chartInstances: echarts.ECharts[] = []
+const resizeHandlers: (() => void)[] = []
 
 onMounted(async () => {
   try {
@@ -172,6 +176,7 @@ function renderCharts() {
 function renderScoreChart() {
   if (!scoreChartRef.value) return
   const chart = echarts.init(scoreChartRef.value)
+  chartInstances.push(chart)
   const data = growthData.value.scoreTrend || []
   chart.setOption({
     tooltip: { trigger: 'axis' },
@@ -188,12 +193,15 @@ function renderScoreChart() {
       symbolSize: 8
     }]
   })
-  window.addEventListener('resize', () => chart.resize())
+  const handler = () => chart.resize()
+  resizeHandlers.push(handler)
+  window.addEventListener('resize', handler)
 }
 
 function renderRankChart() {
   if (!rankChartRef.value) return
   const chart = echarts.init(rankChartRef.value)
+  chartInstances.push(chart)
   const data = growthData.value.rankTrend || []
   chart.setOption({
     tooltip: { trigger: 'axis' },
@@ -210,12 +218,25 @@ function renderRankChart() {
       symbolSize: 8
     }]
   })
-  window.addEventListener('resize', () => chart.resize())
+  const handler = () => chart.resize()
+  resizeHandlers.push(handler)
+  window.addEventListener('resize', handler)
 }
+
+// 保存 subjectChart 实例（因为切换科目会重建）
+let subjectChart: echarts.ECharts | null = null
 
 function renderSubjectChart(subject: string) {
   if (!subjectChartRef.value) return
+  // 销毁旧实例
+  if (subjectChart) {
+    subjectChart.dispose()
+    const idx = chartInstances.indexOf(subjectChart)
+    if (idx > -1) chartInstances.splice(idx, 1)
+  }
   const chart = echarts.init(subjectChartRef.value)
+  chartInstances.push(chart)
+  subjectChart = chart
   const data = growthData.value.subjectTrends?.[subject] || []
   chart.setOption({
     tooltip: { trigger: 'axis' },
@@ -232,7 +253,9 @@ function renderSubjectChart(subject: string) {
       symbolSize: 8
     }]
   })
-  window.addEventListener('resize', () => chart.resize())
+  const handler = () => chart.resize()
+  resizeHandlers.push(handler)
+  window.addEventListener('resize', handler)
 }
 
 function requireStudentId() {
@@ -244,6 +267,13 @@ function requireStudentId() {
   }
   return studentId
 }
+
+onUnmounted(() => {
+  // 清理所有 ECharts 实例
+  chartInstances.forEach(chart => chart.dispose())
+  // 清理所有 resize 监听器
+  resizeHandlers.forEach(handler => window.removeEventListener('resize', handler))
+})
 
 </script>
 

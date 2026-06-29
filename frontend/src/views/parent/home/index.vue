@@ -56,7 +56,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted, nextTick } from 'vue'
+import { ref, onMounted, onUnmounted, nextTick } from 'vue'
 import { getStudentId } from '@/utils/auth'
 import { getChildOverview } from '@/api/parent'
 import Header from '@/components/Header.vue'
@@ -66,6 +66,8 @@ import { ElMessage } from 'element-plus'
 
 const loading = ref(true)
 const trendChartRef = ref<HTMLElement>()
+let trendChart: echarts.ECharts | null = null
+let resizeHandler: (() => void) | null = null
 
 const overview = ref({
   currentBatch: '',
@@ -73,7 +75,7 @@ const overview = ref({
   scoreGap: 0,
   weeklyAiComment: '',
   weeklyCompletionRate: 0,
-  recentExamTrend: [] as { date: string; score: number; rank: number }[]
+  recentExamTrend: [] as { date: string; score: number; rank?: number }[]
 })
 
 onMounted(async () => {
@@ -93,9 +95,9 @@ onMounted(async () => {
 
 function renderChart() {
   if (!trendChartRef.value) return
-  const chart = echarts.init(trendChartRef.value)
+  trendChart = echarts.init(trendChartRef.value)
   const data = overview.value.recentExamTrend || []
-  chart.setOption({
+  trendChart.setOption({
     tooltip: { trigger: 'axis' },
     legend: { data: ['等效高考分', '等效位次'], bottom: 0 },
     grid: { left: '8%', right: '8%', bottom: '20%', top: '8%' },
@@ -106,10 +108,11 @@ function renderChart() {
     ],
     series: [
       { name: '等效高考分', type: 'line', data: data.map(d => d.score), smooth: true, lineStyle: { color: '#409eff', width: 3 }, symbol: 'circle' },
-      { name: '等效位次', type: 'line', yAxisIndex: 1, data: data.map(d => d.rank), smooth: true, lineStyle: { color: '#67c23a', width: 3 }, symbol: 'diamond' }
+      { name: '等效位次', type: 'line', yAxisIndex: 1, data: data.map(d => d.rank || 0), smooth: true, lineStyle: { color: '#67c23a', width: 3 }, symbol: 'diamond' }
     ]
   })
-  window.addEventListener('resize', () => chart.resize())
+  resizeHandler = () => trendChart?.resize()
+  window.addEventListener('resize', resizeHandler)
 }
 
 function requireStudentId() {
@@ -121,6 +124,11 @@ function requireStudentId() {
   }
   return studentId
 }
+
+onUnmounted(() => {
+  if (trendChart) trendChart.dispose()
+  if (resizeHandler) window.removeEventListener('resize', resizeHandler)
+})
 
 </script>
 

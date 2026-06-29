@@ -53,6 +53,7 @@ public class SecurityConfig {
             // 公开端点
             .antMatchers("/api/v1/user/login").permitAll()
             .antMatchers("/api/v1/user/register").permitAll()
+            .antMatchers("/api/v1/captcha/**").permitAll()
             // Actuator 端点：仅 health 公开，其余需 ADMIN 角色
             .antMatchers("/actuator/health").permitAll()
             .antMatchers("/actuator/**").hasRole("ADMIN")

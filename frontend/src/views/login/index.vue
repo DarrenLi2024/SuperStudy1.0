@@ -13,8 +13,9 @@
         <el-form-item prop="captchaCode">
           <div class="captcha-row">
             <el-input v-model="form.captchaCode" placeholder="验证码" size="large" style="flex:1" maxlength="4" />
-            <div class="captcha-img" @click="refreshCaptcha" :title="'点击刷新验证码'">
-              <canvas ref="captchaCanvasRef" width="120" height="44"></canvas>
+            <div class="captcha-img" @click="refreshCaptcha" title="点击刷新验证码">
+              <img v-if="captchaImage" :src="captchaImage" alt="验证码" width="120" height="44" />
+              <span v-else class="captcha-loading">加载中...</span>
             </div>
           </div>
         </el-form-item>
@@ -32,17 +33,18 @@
 </template>
 
 <script setup lang="ts">
-import { ref, reactive, onMounted, nextTick } from 'vue'
+import { ref, reactive, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { ElMessage, type FormInstance, type FormRules } from 'element-plus'
 import { setToken, setUserInfo } from '@/utils/auth'
 import { login } from '@/api/user'
+import { getCaptcha } from '@/api/captcha'
 
 const router = useRouter()
 const loginForm = ref<FormInstance>()
 const loading = ref(false)
-const captchaCanvasRef = ref<HTMLCanvasElement>()
-const captchaText = ref('')
+const captchaImage = ref('')
+const captchaId = ref('')
 
 const form = reactive({
   username: '',
@@ -53,76 +55,18 @@ const form = reactive({
 const rules: FormRules = {
   username: [{ required: true, message: '请输入账号', trigger: 'blur' }],
   password: [{ required: true, message: '请输入密码', trigger: 'blur' }],
-  captchaCode: [
-    { required: true, message: '请输入验证码', trigger: 'blur' },
-    {
-      validator: (_rule, value, callback) => {
-        if (value && value.toUpperCase() !== captchaText.value.toUpperCase()) {
-          callback(new Error('验证码错误'))
-        } else {
-          callback()
-        }
-      },
-      trigger: 'blur'
-    }
-  ]
+  captchaCode: [{ required: true, message: '请输入验证码', trigger: 'blur' }]
 }
 
-// 生成随机验证码
-const generateCaptcha = () => {
-  const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'
-  let code = ''
-  for (let i = 0; i < 4; i++) {
-    code += chars[Math.floor(Math.random() * chars.length)]
+const refreshCaptcha = async () => {
+  try {
+    const res = await getCaptcha()
+    captchaId.value = res.data.captchaId
+    captchaImage.value = res.data.captchaImage
+    form.captchaCode = ''
+  } catch {
+    ElMessage.error('验证码加载失败，请刷新重试')
   }
-  captchaText.value = code
-  return code
-}
-
-// 绘制验证码到Canvas
-const drawCaptcha = (code: string) => {
-  nextTick(() => {
-    const canvas = captchaCanvasRef.value
-    if (!canvas) return
-    const ctx = canvas.getContext('2d')
-    if (!ctx) return
-
-    // 背景
-    ctx.fillStyle = '#f0f2f5'
-    ctx.fillRect(0, 0, 120, 44)
-
-    // 干扰线
-    for (let i = 0; i < 4; i++) {
-      ctx.strokeStyle = `rgba(${Math.random() * 200},${Math.random() * 200},${Math.random() * 200},0.5)`
-      ctx.beginPath()
-      ctx.moveTo(Math.random() * 120, Math.random() * 44)
-      ctx.lineTo(Math.random() * 120, Math.random() * 44)
-      ctx.stroke()
-    }
-
-    // 干扰点
-    for (let i = 0; i < 30; i++) {
-      ctx.fillStyle = `rgba(${Math.random() * 255},${Math.random() * 255},${Math.random() * 255},0.5)`
-      ctx.fillRect(Math.random() * 120, Math.random() * 44, 1, 1)
-    }
-
-    // 文字
-    for (let i = 0; i < code.length; i++) {
-      ctx.font = `${20 + Math.random() * 6}px bold Arial`
-      ctx.fillStyle = `rgb(${Math.random() * 100},${Math.random() * 100},${Math.random() * 150})`
-      ctx.save()
-      ctx.translate(20 + i * 24, 28 + Math.random() * 6 - 3)
-      ctx.rotate((Math.random() - 0.5) * 0.4)
-      ctx.fillText(code[i], 0, 0)
-      ctx.restore()
-    }
-  })
-}
-
-const refreshCaptcha = () => {
-  const code = generateCaptcha()
-  drawCaptcha(code)
-  form.captchaCode = ''
 }
 
 onMounted(() => {
@@ -137,7 +81,9 @@ const handleLogin = async () => {
       try {
         const res = await login({
           username: form.username,
-          password: form.password
+          password: form.password,
+          captchaId: captchaId.value,
+          captchaCode: form.captchaCode
         })
         const { token, user } = res.data
         doLogin(token, user)
@@ -221,7 +167,11 @@ function doLogin(token: string, user: any) {
   border: 1px solid #dcdfe6;
   transition: border-color 0.2s;
   &:hover { border-color: #409eff; }
-  canvas { display: block; }
+  img { display: block; }
+}
+.captcha-loading {
+  display: flex; align-items: center; justify-content: center;
+  width: 120px; height: 44px; font-size: 12px; color: #909399;
 }
 
 .login-tips {

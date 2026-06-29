@@ -46,10 +46,39 @@ public class ParentController {
         overview.put("scoreGap", cards.getDreamCollege() == null ? null : cards.getDreamCollege().getScoreGap());
         overview.put("weeklyAiComment", tasks.getAiComment());
         overview.put("weeklyCompletionRate", tasks.getCompletionRate());
-        overview.put("recentExamTrend", growthData.getScoreTrend());
-        overview.put("rankTrend", growthData.getRankTrend());
-        overview.put("examRecords", examRecords);
+
+        // 合并 scoreTrend 和 rankTrend 为 recentExamTrend（含 date, score, rank）
+        List<Map<String, Object>> recentExamTrend = mergeTrends(
+                growthData.getScoreTrend(),
+                growthData.getRankTrend()
+        );
+        overview.put("recentExamTrend", recentExamTrend);
 
         return ResponseResult.success(overview);
+    }
+
+    /**
+     * 合并分数趋势和位次趋势为统一格式 [{date, score, rank}]
+     */
+    private List<Map<String, Object>> mergeTrends(
+            List<GrowthDataResponse.ScoreTrend> scoreTrends,
+            List<GrowthDataResponse.RankTrend> rankTrends) {
+        List<Map<String, Object>> merged = new ArrayList<>();
+        Map<String, Integer> rankByDate = new LinkedHashMap<>();
+        if (rankTrends != null) {
+            for (GrowthDataResponse.RankTrend rt : rankTrends) {
+                rankByDate.put(rt.getDate(), rt.getRank());
+            }
+        }
+        if (scoreTrends != null) {
+            for (GrowthDataResponse.ScoreTrend st : scoreTrends) {
+                Map<String, Object> item = new LinkedHashMap<>();
+                item.put("date", st.getDate());
+                item.put("score", st.getScore());
+                item.put("rank", rankByDate.getOrDefault(st.getDate(), 0));
+                merged.add(item);
+            }
+        }
+        return merged;
     }
 }

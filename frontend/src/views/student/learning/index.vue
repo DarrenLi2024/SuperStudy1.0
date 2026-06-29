@@ -16,7 +16,7 @@
         <div class="training-grid">
           <el-card v-for="subject in subjects" :key="subject.name" shadow="hover"
             class="subject-card" @click="startTraining(subject.name)">
-            <div class="subject-icon">{{ subject.icon }}</div>
+            <div class="subject-icon">{{ getSubjectIcon(subject.name) }}</div>
             <div class="subject-name">{{ subject.name }}</div>
             <div class="subject-progress">
               <el-progress :percentage="subject.mastery"
@@ -90,6 +90,7 @@ import KnowledgeHeatmap from '@/components/KnowledgeHeatmap.vue'
 import { getErrorQuestions, getKnowledgeStatus } from '@/api/learning'
 import { getTrainingQuestions, getReinforcementQuestions } from '@/api/question'
 import { getStudentId } from '@/utils/auth'
+import { getSubjectIcon } from '@/constants/subjects'
 import { useAI } from '@/composables/useAI'
 import { useRouter } from 'vue-router'
 
@@ -106,7 +107,7 @@ const {
 const loading = ref(true)
 const trainingLoading = ref<string | null>(null)
 
-interface SubjectMastery { name: string; icon: string; mastery: number }
+interface SubjectMastery { name: string; mastery: number }
 interface ErrorItem { id: number; subject: string; knowledgePoint: string; questionContent: string; wrongAnswer: string; aiAnalysis: string; reinforcementFlag: number; createdAt: string }
 interface KnowledgeSubject { subject: string; knowledgePoints: { name: string; masteryLevel: number; status: string }[] }
 
@@ -143,7 +144,6 @@ onMounted(async () => {
 
     subjects.value = knowledgeData.value.map((item) => ({
       name: item.subject,
-      icon: subjectIcon(item.subject),
       mastery: item.knowledgePoints.length > 0
         ? Math.round(item.knowledgePoints.reduce((sum, p) => sum + p.masteryLevel, 0) / item.knowledgePoints.length)
         : 0
@@ -163,7 +163,15 @@ const startTraining = async (subject: string) => {
     if (!studentId) return
     const res = await getTrainingQuestions(studentId, subject, 5)
     const questions = (res as any).data || []
-    ElMessage.success(`AI已为你生成${questions.length}道${subject}训练题，请前往模考中心作答`)
+    if (questions.length > 0) {
+      // 将题目存储到 sessionStorage，跳转到模考中心自动加载
+      sessionStorage.setItem('superstudy_pending_questions', JSON.stringify(questions))
+      sessionStorage.setItem('superstudy_exam_type', 'weekly')
+      ElMessage.success(`AI已为你生成${questions.length}道${subject}训练题，即将跳转...`)
+      router.push('/student/exam')
+    } else {
+      ElMessage.warning('暂无训练题目，请稍后重试')
+    }
   } catch (e: any) {
     ElMessage.error('题目生成失败：' + (e.message || '请稍后重试'))
   } finally {
@@ -178,8 +186,10 @@ const doReinforcement = async (err: ErrorItem) => {
     const res = await getReinforcementQuestions(studentId, err.knowledgePoint, 5)
     const questions = (res as any).data || []
     if (questions.length > 0) {
-      ElMessage.success(`已生成${questions.length}道${err.subject}补强题`)
-      // 跳转到模考中心
+      // 将补强题目存储到 sessionStorage，跳转到模考中心自动加载
+      sessionStorage.setItem('superstudy_pending_questions', JSON.stringify(questions))
+      sessionStorage.setItem('superstudy_exam_type', 'weekly')
+      ElMessage.success(`已生成${questions.length}道${err.subject}补强题，即将跳转...`)
       router.push('/student/exam')
     } else {
       ElMessage.warning('暂无补强题目，请稍后重试')
@@ -187,15 +197,6 @@ const doReinforcement = async (err: ErrorItem) => {
   } catch (e: any) {
     ElMessage.error('补强题目生成失败：' + (e.message || '请稍后重试'))
   }
-}
-
-function subjectIcon(subject: string) {
-  const icons: Record<string, string> = {
-    '语文': '📖', '数学': '📐', '英语': '🌍',
-    '历史': '🏛️', '政治': '📜', '地理': '🌏',
-    '物理': '⚡', '化学': '🧪', '生物': '🧬'
-  }
-  return icons[subject] || '📌'
 }
 
 function requireStudentId() {

@@ -46,7 +46,7 @@ mybatis-plus:
 
 jwt:
   # 生产环境必须通过 JWT_SECRET 环境变量覆盖！至少 64 字符（HS512 要求）
-  secret: ${JWT_SECRET:superstudy-secret-key-2024-abcdefghijklmnopqrstuvwxyz}
+  secret: ${JWT_SECRET:superstudy-secret-key-2024-abcdefghijklmnopqrstuvwxyz-64chars-min}
   expiration: 86400000
   header: Authorization
   prefix: Bearer 

@@ -5,6 +5,7 @@ import lombok.Data;
 import javax.validation.constraints.NotBlank;
 import javax.validation.constraints.NotNull;
 import java.io.Serializable;
+import java.util.List;
 import java.util.Map;
 
 @Data
@@ -20,4 +21,10 @@ public class ExamSubmitRequest implements Serializable {
 
     @NotBlank(message = "考试日期不能为空")
     private String examDate;
+
+    /**
+     * 学生作答记录（可选，用于逐题分析和错题记录）
+     * 每项包含: questionId, subject, selectedAnswer, correctAnswer, isCorrect
+     */
+    private List<AnswerRecord> answers;
 }

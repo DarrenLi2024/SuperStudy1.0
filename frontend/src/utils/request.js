@@ -36,7 +36,10 @@ service.interceptors.response.use(
         clearAuth()
         router.push('/login')
       }
-      ElMessage.error(res.message || '请求失败')
+      // 统一错误提示（组件内 catch 若已处理需设置 silent 避免重复提示）
+      if (!response.config._silent) {
+        ElMessage.error(res.message || '请求失败')
+      }
       return Promise.reject(new Error(res.message || '请求失败'))
     }
     return res
@@ -50,7 +53,9 @@ service.interceptors.response.use(
         router.push('/login')
       }
     }
-    ElMessage.error(error.response?.data?.message || error.message || '网络请求失败')
+    if (!error.config?._silent) {
+      ElMessage.error(error.response?.data?.message || error.message || '网络请求失败')
+    }
     return Promise.reject(error)
   }
 )

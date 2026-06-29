@@ -46,11 +46,19 @@ public class UserServiceImpl extends ServiceImpl<SysUserMapper, SysUser> impleme
     @Autowired
     private TokenRedisService tokenRedisService;
 
+    @Autowired
+    private CaptchaController captchaController;
+
     @Value("${jwt.expiration}")
     private Long expiration;
 
     @Override
     public LoginResponse login(LoginRequest request) {
+        // 验证码校验（后端权威校验，前端验证码仅用于体验优化）
+        if (!captchaController.validate(request.getCaptchaId(), request.getCaptchaCode())) {
+            throw new BusinessException(400, "验证码错误或已过期");
+        }
+
         SysUser user = sysUserMapper.selectOne(
                 new LambdaQueryWrapper<SysUser>().eq(SysUser::getUsername, request.getUsername()));
         if (user == null || !passwordEncoder.matches(request.getPassword(), user.getPassword())) {
