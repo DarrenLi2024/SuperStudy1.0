@@ -65,8 +65,7 @@ public class GaokaoDataServiceImpl implements GaokaoDataService {
                 .eq(ScoreRank::getYear, targetYear)
                 .eq(ScoreRank::getSubjectType, targetSubject)
                 .eq(ScoreRank::getProvince, targetProvince)
-                .eq(ScoreRank::getScore, score)
-                .last("LIMIT 1"));
+                .eq(ScoreRank::getScore, score));
         if (exact != null) return exact.getRankValue();
 
         // 邻近插值
@@ -142,15 +141,27 @@ public class GaokaoDataServiceImpl implements GaokaoDataService {
     private int saveRanks(List<ScoreRank> ranks) {
         int inserted = 0;
         for (ScoreRank rank : ranks) {
-            // 检查是否已存在
-            ScoreRank existing = scoreRankMapper.selectOne(new LambdaQueryWrapper<ScoreRank>()
-                    .eq(ScoreRank::getProvince, rank.getProvince())
-                    .eq(ScoreRank::getYear, rank.getYear())
-                    .eq(ScoreRank::getSubjectType, rank.getSubjectType())
-                    .eq(ScoreRank::getScore, rank.getScore())
-                    .last("LIMIT 1"));
-            if (existing == null && rank.getScore() != null && rank.getRankValue() != null) {
-                inserted += scoreRankMapper.insert(rank);
+            if (rank.getScore() == null || rank.getRankValue() == null) {
+                continue;
+            }
+            try {
+                // 先查是否已存在 (按 year + subjectType + score 唯一键)
+                ScoreRank existing = scoreRankMapper.selectOne(new LambdaQueryWrapper<ScoreRank>()
+                        .eq(ScoreRank::getYear, rank.getYear())
+                        .eq(ScoreRank::getSubjectType, rank.getSubjectType())
+                        .eq(ScoreRank::getScore, rank.getScore()));
+                if (existing != null) {
+                    // 已存在则更新 rankValue 和 province
+                    existing.setRankValue(rank.getRankValue());
+                    existing.setProvince(rank.getProvince());
+                    scoreRankMapper.updateById(existing);
+                } else {
+                    inserted += scoreRankMapper.insert(rank);
+                }
+            } catch (Exception e) {
+                // 并发插入导致的重复键，跳过
+                log.debug("一分一段数据插入跳过(可能重复): {} {} {} {}", 
+                        rank.getProvince(), rank.getYear(), rank.getSubjectType(), rank.getScore());
             }
         }
         return inserted;
