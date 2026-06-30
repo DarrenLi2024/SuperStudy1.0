@@ -60,10 +60,10 @@ services:
       SPRING_REDIS_PORT: "6379"
       SPRING_REDIS_PASSWORD: ${SPRING_REDIS_PASSWORD:?err}
       JWT_SECRET: ${JWT_SECRET}
-      AI_LLM_PROVIDER: ${AI_LLM_PROVIDER:-local}
-      AI_LLM_BASE_URL: ${AI_LLM_BASE_URL:-}
+      AI_LLM_PROVIDER: ${AI_LLM_PROVIDER:-deepseek}
+      AI_LLM_BASE_URL: ${AI_LLM_BASE_URL:-https://api.deepseek.com/v1/chat/completions}
       AI_LLM_API_KEY: ${AI_LLM_API_KEY:-}
-      AI_LLM_MODEL: ${AI_LLM_MODEL:-local-deterministic}
+      AI_LLM_MODEL: ${AI_LLM_MODEL:-deepseek-chat}
       AI_LLM_TIMEOUT_MS: "8000"
       AI_LLM_MAX_RETRIES: "2"
     depends_on:
