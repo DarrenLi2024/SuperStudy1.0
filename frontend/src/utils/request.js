@@ -3,10 +3,9 @@ import { ElMessage } from 'element-plus'
 import { getToken, clearAuth } from './auth'
 import router from '@/router'
 
-// 生产环境使用环境变量 VITE_API_BASE_URL，开发环境使用 vite proxy
-const API_BASE_URL = import.meta.env.PROD
-  ? (import.meta.env.VITE_API_BASE_URL || 'https://backend-production-a907.up.railway.app')
-  : ''
+// 生产环境通过 nginx 反向代理同源访问后端，无需设置 baseURL
+// 开发环境使用 vite proxy（vite.config.js 中配置）
+const API_BASE_URL = ''
 
 const service = axios.create({
   baseURL: API_BASE_URL,
